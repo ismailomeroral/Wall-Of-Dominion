@@ -754,6 +754,7 @@
         let players = [];
         let multiplayerSession = false;
         let multiplayerRoomCode = null;
+        let multiplayerGameSessionId = null;
         let multiplayerPeerId = null;
         let multiplayerIsHost = false;
         let multiplayerPreviewSyncTimer = null;
@@ -950,7 +951,12 @@
             noise.start(now);
         }
 
-        function playSFX(effect) {
+        function playSFX(effect, broadcast = true) {
+            if (broadcast && multiplayerSession &&
+                players[activePlayerIndex]?.peerId === multiplayerPeerId &&
+                multiplayerSfxEffects.has(effect)) {
+                publishMultiplayerActionEvent('SFX', { effect });
+            }
             if (soundMuted) return;
             switch (effect) {
                 case 'step': // Piyon adım sesi
@@ -1564,10 +1570,10 @@
                     `;
                 }).join('');
                 ticks++;
-                playSFX('dice_tick');
+                playSFX('dice_tick', false);
                 if (ticks >= 11) {
                     clearInterval(iv);
-                    playSFX('dice_done');
+                    playSFX('dice_done', false);
                     const rankedRolls = packet.rolls.slice().sort((a, b) => b.roll - a.roll);
                     container.innerHTML = rankedRolls.map((player, idx) => {
                         const isFirst = idx === 0;
@@ -2515,7 +2521,7 @@
                     const t2 = diceAnimationFace(packet.seed, tick, 1);
                     box.textContent = `${faces[t1]} ${t1 + 1}`;
                     if (useTwoDiceLowest) box2.textContent = `${faces[t2]} ${t2 + 1}`;
-                    playSFX('dice_tick');
+                    playSFX('dice_tick', false);
                 }
                 if (!resultShown && elapsed >= 750) {
                     resultShown = true;
@@ -2537,7 +2543,7 @@
                     label.textContent = notes.length
                         ? `${effectiveAP} AP Kazandınız! (${notes.join(' | ')})`
                         : `${effectiveAP} Hareket Puanı (AP) Kazandınız!`;
-                    playSFX('dice_done');
+                    playSFX('dice_done', false);
                 }
                 if (elapsed < duration) return;
                 clearInterval(interval);
@@ -2630,7 +2636,6 @@
         function animatePawnStepByStep(player, army, targetKey, totalCost) {
             if (isPawnAnimating) return;
 
-            // Patikayı geriye doğru (hedeften başlangıca) çıkar ve ters çevir
             const pathKeys = [];
             let curr = targetKey;
             while (curr) {
@@ -2640,6 +2645,14 @@
             }
 
             if (pathKeys.length < 2) return;
+            if (multiplayerSession && player.peerId === multiplayerPeerId) {
+                publishMultiplayerActionEvent('PAWN_MOVE', {
+                    playerId: player.id,
+                    armyIndex: player.armies.indexOf(army),
+                    pathKeys,
+                    stepDuration: 210
+                });
+            }
 
             isPawnAnimating = true;
             player.remainingAP -= totalCost;
@@ -2659,6 +2672,9 @@
                     calculateDijkstraAndTargets(player, army);
                     updateUI();
                     drawMap();
+                    if (multiplayerSession && player.peerId === multiplayerPeerId) {
+                        scheduleMultiplayerSync();
+                    }
                     return;
                 }
 
@@ -2667,7 +2683,7 @@
                 const startPx = hexToPixel(fromHex.q, fromHex.r);
                 const endPx = hexToPixel(toHex.q, toHex.r);
 
-                playSFX('step');
+                playSFX('step', false);
                 const stepDuration = 210; // Her hücre adımı 210ms sürer
                 const startTime = performance.now();
 
@@ -2696,6 +2712,54 @@
                 requestAnimationFrame(interpolateStep);
             }
 
+            runNextStep();
+        }
+
+        function animateRemotePawnPath(packet) {
+            if (!Array.isArray(packet.pathKeys) || packet.pathKeys.length < 2) return;
+            const player = players.find(item => item.id === packet.playerId);
+            const army = player?.armies?.[packet.armyIndex];
+            const path = packet.pathKeys.map(key => grid.get(key));
+            if (!player || player.peerId === multiplayerPeerId || !army ||
+                path.length < 2 || path.some(hex => !hex)) return;
+
+            const stepDuration = Math.max(100, Math.min(1000, packet.stepDuration || 210));
+            let stepIndex = 0;
+            const runNextStep = () => {
+                if (stepIndex >= path.length - 1) {
+                    delete army.renderX;
+                    delete army.renderY;
+                    return;
+                }
+
+                const fromHex = path[stepIndex];
+                const toHex = path[stepIndex + 1];
+                const startPx = hexToPixel(fromHex.q, fromHex.r);
+                const endPx = hexToPixel(toHex.q, toHex.r);
+                const startTime = performance.now();
+                playSFX('step', false);
+
+                function interpolateStep(now) {
+                    const t = Math.min(1, (now - startTime) / stepDuration);
+                    const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                    army.renderX = startPx.x + (endPx.x - startPx.x) * ease;
+                    army.renderY = startPx.y + (endPx.y - startPx.y) * ease;
+                    if (t < 1) {
+                        requestAnimationFrame(interpolateStep);
+                        return;
+                    }
+
+                    army.lastQ = fromHex.q;
+                    army.lastR = fromHex.r;
+                    army.q = toHex.q;
+                    army.r = toHex.r;
+                    focusCameraSmoothOnHex(army.q, army.r);
+                    stepIndex++;
+                    runNextStep();
+                }
+
+                requestAnimationFrame(interpolateStep);
+            };
             runNextStep();
         }
 
@@ -7435,10 +7499,20 @@
                 addLog(`❓ <b>Şans Kartı (${player.name}):</b> <span class="text-purple-300 font-bold">[${card.title}]</span> — <i>${outcomeText}</i>`);
                 updateUI();
                 drawMap();
+                if (multiplayerSession && player.peerId === multiplayerPeerId) {
+                    scheduleMultiplayerSync();
+                }
             };
 
             if (card.renderInteractive) {
                 card.renderInteractive(player, armyIndex, finishCallback);
+            }
+            if (multiplayerSession && player.peerId === multiplayerPeerId) {
+                publishMultiplayerActionEvent('CHANCE_CARD_REVEAL', {
+                    playerId: player.id,
+                    cardIndex
+                });
+                scheduleMultiplayerSync();
             }
         }
 
@@ -7991,6 +8065,7 @@
             if (multiplayerChannel) multiplayerChannel.close();
             if (multiplayerPeer && !multiplayerPeer.destroyed) multiplayerPeer.destroy();
             sessionStorage.removeItem(`wod_online_roster_${multiplayerRoomCode}`);
+            sessionStorage.removeItem(`wod_online_game_session_${multiplayerRoomCode}`);
             const destination = new URL(window.location.href);
             destination.search = '';
             destination.hash = '';
@@ -9821,6 +9896,12 @@
             'rules-modal', 'victory-modal'
         ];
         const multiplayerSeenMessages = new Set();
+        const multiplayerSeenActionEvents = new Set();
+        const multiplayerSfxEffects = new Set([
+            'step', 'reset', 'city', 'wall_build', 'wall_shift', 'build', 'loot', 'chance', 'whip',
+            'feast', 'trade', 'income', 'dice_tick', 'dice_done', 'army', 'combat_start', 'card_flip',
+            'combat_win', 'combat_lose', 'victory', 'error', 'click'
+        ]);
 
         function setMultiplayerNotice(message, tone = 'slate') {
             let notice = document.getElementById('multiplayer-notice');
@@ -9854,6 +9935,103 @@
 
         function isMultiplayerEventTarget(target) {
             return target instanceof Element && !!target.closest('[data-multiplayer-event]');
+        }
+
+        function publishMultiplayerActionEvent(actionType, details) {
+            if (!multiplayerSession || players[activePlayerIndex]?.peerId !== multiplayerPeerId) return;
+            const packet = {
+                type: 'MULTIPLAYER_ACTION_EVENT',
+                actionType,
+                eventId: `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                peerId: multiplayerPeerId,
+                ...details
+            };
+            if (multiplayerIsHost) broadcastMultiplayerPacket(packet);
+            else sendMultiplayerPacket(packet);
+        }
+
+        function isValidMultiplayerActionEvent(packet, authenticatedPeerId) {
+            const activePlayer = players[activePlayerIndex];
+            if (typeof packet.eventId !== 'string' || !packet.eventId || packet.eventId.length > 128 ||
+                packet.peerId !== authenticatedPeerId || !activePlayer ||
+                activePlayer.peerId !== authenticatedPeerId) return false;
+            if (packet.actionType === 'SFX') return multiplayerSfxEffects.has(packet.effect);
+            if (packet.actionType === 'PAWN_MOVE') {
+                const army = activePlayer.armies[packet.armyIndex];
+                return Number.isSafeInteger(packet.playerId) &&
+                    packet.playerId === activePlayer.id &&
+                    Number.isSafeInteger(packet.armyIndex) &&
+                    packet.armyIndex >= 0 &&
+                    packet.armyIndex < activePlayer.armies.length &&
+                    Array.isArray(packet.pathKeys) &&
+                    packet.pathKeys.length > 1 &&
+                    packet.pathKeys.length <= 128 &&
+                    army && packet.pathKeys[0] === getHexKey(army.q, army.r) &&
+                    packet.pathKeys.every((key, index) => {
+                        if (typeof key !== 'string' || !grid.has(key)) return false;
+                        if (index === 0) return true;
+                        const from = grid.get(packet.pathKeys[index - 1]);
+                        const to = grid.get(key);
+                        return hexDistance(from.q, from.r, to.q, to.r) === 1;
+                    });
+            }
+            if (packet.actionType === 'CHANCE_CARD_REVEAL') {
+                return packet.playerId === activePlayer.id &&
+                    Number.isSafeInteger(packet.cardIndex) &&
+                    packet.cardIndex >= 0 &&
+                    packet.cardIndex < CHANCE_CARDS_DB.length;
+            }
+            return false;
+        }
+
+        function handleMultiplayerActionEvent(packet) {
+            if (!packet.eventId || multiplayerSeenActionEvents.has(packet.eventId)) return;
+            multiplayerSeenActionEvents.add(packet.eventId);
+            if (multiplayerSeenActionEvents.size > 500) {
+                multiplayerSeenActionEvents.delete(multiplayerSeenActionEvents.values().next().value);
+            }
+            if (packet.actionType === 'SFX') {
+                playSFX(packet.effect, false);
+            } else if (packet.actionType === 'PAWN_MOVE') {
+                animateRemotePawnPath(packet);
+            } else if (packet.actionType === 'CHANCE_CARD_REVEAL') {
+                showRemoteChanceCardReveal(packet);
+            }
+        }
+
+        function showRemoteChanceCardReveal(packet) {
+            const player = players.find(item => item.id === packet.playerId);
+            const card = CHANCE_CARDS_DB[packet.cardIndex];
+            if (!player || player.peerId === multiplayerPeerId || !card) return;
+
+            document.getElementById('chance-modal').classList.remove('hidden');
+            document.getElementById('chance-single-card-view').classList.add('hidden');
+            document.getElementById('chance-Selection-view').classList.add('hidden');
+            document.getElementById('chance-random-top-btn').classList.add('hidden');
+            document.getElementById('chance-modal-top-label').textContent = `❓ ŞANS HÜCRESİ • ${player.name.toUpperCase()}`;
+            document.getElementById('chance-modal-top-title').textContent = 'Kader Kartı Açılıyor';
+
+            const resultView = document.getElementById('chance-result-view');
+            resultView.classList.remove('hidden', 'chance-flip-in');
+            void resultView.offsetWidth;
+            resultView.classList.add('chance-flip-in');
+            document.getElementById('chance-card-badge').textContent = `${card.icon} ${card.category}`;
+            document.getElementById('chance-card-title').textContent = card.title;
+            document.getElementById('chance-card-desc').textContent = card.desc;
+            document.getElementById('chance-card-outcome').classList.add('hidden');
+            document.getElementById('chance-card-outcome').textContent = '';
+            document.getElementById('chance-keep-btn').classList.add('hidden');
+            document.getElementById('chance-continue-btn').classList.add('hidden');
+            document.getElementById('chance-interactive-stage').textContent =
+                `${player.name} kartın etkisini çözüyor…`;
+            document.getElementById('chance-interactive-stage').className =
+                'my-3 text-sm text-amber-200 font-semibold';
+
+            const holdBadge = document.getElementById('chance-card-hold-badge');
+            holdBadge.textContent = card.holdable ? '🎒 SAKLANABİLİR KART' : '⚡ ANLIK KART';
+            holdBadge.className = card.holdable
+                ? 'inline-block px-2.5 py-0.5 rounded-full bg-indigo-500/25 border border-indigo-400/50 text-indigo-200 text-[10px] font-bold'
+                : 'inline-block px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold';
         }
 
         function toggleMultiplayerChat() {
@@ -10179,6 +10357,8 @@
                 const previousSession = multiplayerTradeNegotiation;
                 const isNewSession = !previousSession || previousSession.sessionId !== session.sessionId;
                 const stageChanged = previousSession?.status !== session.status;
+                const offerFormIsStillHidden = session.status === 'active' &&
+                    document.getElementById('trade-offer-content').classList.contains('hidden');
                 multiplayerTradeNegotiation = session;
                 pendingTradeInviteId = null;
                 if (isNewSession) {
@@ -10187,7 +10367,7 @@
                     renderTradeSessionStage(session.status !== 'pending_accept');
                     const other = getTradeCounterparty();
                     if (other) setMultiplayerNotice(`${other.name} ile ticaret görüşmesi başladı.`, 'amber');
-                } else if (stageChanged) {
+                } else if (stageChanged || offerFormIsStillHidden) {
                     renderTradeSessionStage(session.status !== 'pending_accept');
                 } else {
                     const other = getTradeCounterparty();
@@ -10440,6 +10620,15 @@
 
             if (multiplayerIsHost) {
                 if (packet.type === 'MAP_PREVIEW') return;
+                if (packet.type === 'MULTIPLAYER_ACTION_EVENT') {
+                    const authenticatedPeerId = connection
+                        ? multiplayerConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    if (!isValidMultiplayerActionEvent(packet, authenticatedPeerId)) return;
+                    handleMultiplayerActionEvent(packet);
+                    broadcastMultiplayerPacket(packet, authenticatedPeerId);
+                    return;
+                }
                 if (packet.type === 'MOVEMENT_DICE_REQUEST') {
                     const authenticatedPeerId = connection
                         ? multiplayerConnectionPlayers.get(connection.peer)
@@ -10544,6 +10733,10 @@
                 return;
             }
 
+            if (packet.type === 'MULTIPLAYER_ACTION_EVENT') {
+                handleMultiplayerActionEvent(packet);
+                return;
+            }
             if (packet.type === 'MAP_PREVIEW') {
                 applyMultiplayerMapPreview(packet.preview);
                 return;
@@ -10618,20 +10811,25 @@
             }
         }
 
+        function getMultiplayerGameHostPeerId() {
+            const sessionSuffix = multiplayerGameSessionId ? `-${multiplayerGameSessionId}` : '';
+            return `wod-game-${multiplayerRoomCode.toLowerCase()}${sessionSuffix}`;
+        }
+
         function scheduleMultiplayerReconnect() {
             if (multiplayerReconnectTimer || !multiplayerPeer || !multiplayerPeer.open || multiplayerPeer.destroyed) return;
             if (multiplayerClientConnection && multiplayerClientConnection.open) return;
             multiplayerReconnectAttempts++;
-            if (multiplayerReconnectAttempts > 20) {
+            if (multiplayerReconnectAttempts > 30) {
                 setMultiplayerNotice('Odaya bağlanılamadı. Bağlantıyı kontrol edip sayfayı yenileyin.', 'rose');
                 return;
             }
 
-            setMultiplayerNotice(`Oda bağlantısı yeniden deneniyor (${multiplayerReconnectAttempts}/20)…`, 'amber');
+            setMultiplayerNotice(`Host bağlantısı bekleniyor (${multiplayerReconnectAttempts}/30)…`, 'amber');
             multiplayerReconnectTimer = setTimeout(() => {
                 multiplayerReconnectTimer = null;
                 connectMultiplayerClient();
-            }, 1000);
+            }, Math.min(800 + multiplayerReconnectAttempts * 250, 3000));
         }
 
         function connectMultiplayerClient() {
@@ -10644,7 +10842,7 @@
             }
 
             const connection = multiplayerPeer.connect(
-                `wod-room-${multiplayerRoomCode.toLowerCase()}`,
+                getMultiplayerGameHostPeerId(),
                 { reliable: true }
             );
             multiplayerClientConnection = connection;
@@ -10657,7 +10855,11 @@
             });
             connection.on('data', data => handleMultiplayerPacket(data));
             connection.on('error', error => {
-                console.error('Multiplayer client connection error.', error);
+                if (error.type === 'peer-unavailable') {
+                    setMultiplayerNotice('Host oyun bağlantısı hazırlanıyor; tekrar deneniyor…', 'amber');
+                } else {
+                    console.error('Multiplayer client connection error.', error);
+                }
                 if (multiplayerClientConnection !== connection) return;
                 multiplayerClientConnection = null;
                 scheduleMultiplayerReconnect();
@@ -10709,6 +10911,10 @@
 
             try {
                 multiplayerRoster = JSON.parse(sessionStorage.getItem(`wod_online_roster_${multiplayerRoomCode}`) || '[]');
+                const gameSessionId = sessionStorage.getItem(`wod_online_game_session_${multiplayerRoomCode}`);
+                multiplayerGameSessionId = gameSessionId && /^[a-z0-9]{1,32}$/i.test(gameSessionId)
+                    ? gameSessionId
+                    : null;
             } catch (error) {
                 console.error('Multiplayer roster could not be read.', error);
                 setMultiplayerNotice('Oda oyuncu listesi okunamadı; lobiye dönüp tekrar deneyin.', 'rose');
@@ -10736,7 +10942,11 @@
                     event.stopImmediatePropagation();
                 } else {
                     multiplayerActionAuthorized = true;
-                    if (!isMultiplayerEventTarget(event.target)) setTimeout(scheduleMultiplayerSync, 0);
+                    if (!isMultiplayerEventTarget(event.target)) {
+                        setTimeout(() => {
+                            if (!isPawnAnimating) scheduleMultiplayerSync();
+                        }, 0);
+                    }
                 }
             }, true);
             ['mousedown', 'touchstart'].forEach(eventName => {
@@ -10755,14 +10965,14 @@
                     multiplayerActionAuthorized = true;
                     if (!isMultiplayerEventTarget(event.target)) {
                         setTimeout(() => {
-                            if (!hasDragged) scheduleMultiplayerSync();
+                            if (!hasDragged && !isPawnAnimating) scheduleMultiplayerSync();
                         }, 0);
                     }
                 }, true);
             });
 
             if (multiplayerIsHost) {
-                multiplayerPeer = new Peer(`wod-room-${multiplayerRoomCode.toLowerCase()}`);
+                multiplayerPeer = new Peer(getMultiplayerGameHostPeerId());
                 multiplayerPeer.on('open', () => {
                     setMultiplayerNotice('Oda hazır • Haritayı düzenleyin ve hazır olduğunuzda başlatın.', 'emerald');
                     document.getElementById('setup-player-count').value = String(Math.max(2, multiplayerRoster.length));
@@ -10778,7 +10988,9 @@
                 });
                 multiplayerPeer.on('error', error => {
                     console.error('Multiplayer host connection error.', error);
-                    setMultiplayerNotice('Oda bağlantısında hata oluştu.', 'rose');
+                    setMultiplayerNotice(error.type === 'unavailable-id'
+                        ? 'Bu oyunun bağlantı kodu başka bir oturumda kullanılıyor. Yeni oda kurup tekrar deneyin.'
+                        : 'Oda bağlantısında hata oluştu.', 'rose');
                 });
             } else {
                 document.getElementById('setup-modal').classList.remove('hidden');
@@ -10787,7 +10999,11 @@
                     connectMultiplayerClient();
                 });
                 multiplayerPeer.on('error', error => {
-                    console.error('Multiplayer client connection error.', error);
+                    if (error.type === 'peer-unavailable') {
+                        setMultiplayerNotice('Host oyun bağlantısı hazırlanıyor; tekrar deneniyor…', 'amber');
+                    } else {
+                        console.error('Multiplayer client connection error.', error);
+                    }
                     scheduleMultiplayerReconnect();
                 });
             }

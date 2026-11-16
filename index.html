@@ -395,6 +395,7 @@
             turnNumber: 1,
             activePlayerIndex: 0,
             phase: 'ROLL',   // 'ROLL' | 'MOVE_AND_ACT'
+            gameSessionId: null,
             currentDice: 0,
             remainingAP: 0,
             players: [],     // { peerId, name, color, ready, isHost, gold, wood, iron, q, r, cityQ, cityR }
@@ -481,6 +482,7 @@
                 turnNumber: 1,
                 activePlayerIndex: 0,
                 phase: 'ROLL',
+                gameSessionId: null,
                 currentDice: 0,
                 remainingAP: 0,
                 players: [{
@@ -526,6 +528,7 @@
                 turnNumber: 1,
                 activePlayerIndex: 0,
                 phase: 'ROLL',
+                gameSessionId: null,
                 currentDice: 0,
                 remainingAP: 0,
                 players: [{
@@ -1081,6 +1084,7 @@
 
         function hostStartMultiplayerGame() {
             if (!isHost) return;
+            roomState.gameSessionId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
             roomState.status = 'FULL_GAME';
             syncRoomStateToAll();
         }
@@ -1089,6 +1093,10 @@
             if (roomState.status !== 'FULL_GAME') return;
             try {
                 sessionStorage.setItem(`wod_online_roster_${currentRoomCode}`, JSON.stringify(roomState.players));
+                sessionStorage.setItem(
+                    `wod_online_game_session_${currentRoomCode}`,
+                    roomState.gameSessionId || ''
+                );
             } catch (error) {
                 console.error('Could not hand off the room roster to the full game.', error);
                 setNetStatus('Oda bilgisi aktarılamadı', 'rose');
