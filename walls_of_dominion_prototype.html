@@ -97,6 +97,40 @@
         .chance-flip-in {
             animation: chanceFlipInAnim 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
+        @keyframes combatCardShuffle {
+            0% { transform: translateX(0) rotate(0deg); }
+            25% { transform: translateX(-8px) rotate(-4deg); }
+            50% { transform: translateX(8px) rotate(4deg); }
+            75% { transform: translateX(-4px) rotate(-2deg); }
+            100% { transform: translateX(0) rotate(0deg); }
+        }
+        .combat-card-shuffling {
+            animation: combatCardShuffle 0.55s ease-in-out;
+        }
+        @keyframes arenaRpsLeft {
+            0% { transform: translateX(-70px) rotate(-18deg) scale(0.78); }
+            55% { transform: translateX(28px) rotate(10deg) scale(1.12); }
+            100% { transform: translateX(0) rotate(0) scale(1); }
+        }
+        @keyframes arenaRpsRight {
+            0% { transform: translateX(70px) rotate(18deg) scale(0.78); }
+            55% { transform: translateX(-28px) rotate(-10deg) scale(1.12); }
+            100% { transform: translateX(0) rotate(0) scale(1); }
+        }
+        .arena-rps-left { animation: arenaRpsLeft 1.1s ease-in-out both; }
+        .arena-rps-right { animation: arenaRpsRight 1.1s ease-in-out both; }
+        @keyframes arenaCoinFlip {
+            0% { transform: translateY(0) rotateY(0) scale(0.9); }
+            50% { transform: translateY(-42px) rotateY(720deg) scale(1.14); }
+            100% { transform: translateY(0) rotateY(1440deg) scale(1); }
+        }
+        .arena-coin-flipping { animation: arenaCoinFlip 1.2s ease-in-out both; }
+        @keyframes arenaDieRoll {
+            0% { transform: rotate(0) scale(0.85); }
+            60% { transform: rotate(540deg) scale(1.15); }
+            100% { transform: rotate(720deg) scale(1); }
+        }
+        .arena-die-rolling { animation: arenaDieRoll 1.05s ease-out both; }
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
@@ -456,8 +490,11 @@
             </div>
 
             <div class="flex justify-center gap-3">
-                <button id="combat-shuffle-btn" onclick="flipAndShuffleCombatCards()" class="hidden gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-sm">
-                    🃏 Kartları Kapat ve Karıştır
+                <button id="combat-shuffle-btn" onclick="shuffleCombatCards()" class="hidden gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-sm">
+                    🔀 Karıştır
+                </button>
+                <button id="combat-draw-btn" onclick="drawCombatCards()" class="hidden bg-amber-700 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-amber-400">
+                    🂠 Kart Çektir
                 </button>
                 <button id="combat-opportunity-btn" onclick="redrawAfterOpportunity()" class="hidden gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-sm">
                     ✨ Fırsat Kartı: Tekrar Kart Çek!
@@ -523,6 +560,7 @@
                 </div>
                 <div id="chance-card-title" class="text-xl font-bold text-amber-400 mb-1.5 font-medieval"></div>
                 <p id="chance-card-desc" class="text-xs sm:text-sm text-slate-200 mb-3 max-w-md mx-auto"></p>
+                <div id="chance-role-display" class="hidden text-[11px] text-purple-200 bg-purple-950/60 border border-purple-500/30 rounded-lg px-3 py-1.5 max-w-md mx-auto"></div>
 
                 <!-- Kart İçi Özel Etkileşim Alanı (Zar Atma, Şölen Başlatma, Sandık Açma vb.) -->
                 <div id="chance-interactive-stage" class="my-3"></div>
@@ -629,6 +667,8 @@
 
             <div class="flex gap-2 mt-4">
                 <button onclick="closeTradeModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold">İptal / Daveti Reddet</button>
+                <button id="trade-edit-button" onclick="editTradeOffer()" class="hidden flex-1 bg-indigo-800 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold">✏️ Teklifi Değiştir</button>
+                <button id="trade-approve-button" onclick="approveTradeOffer()" class="hidden flex-1 bg-emerald-700 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-bold">✅ Teklifi Onayla</button>
                 <button id="trade-submit-button" onclick="executeTrade()" class="flex-1 gold-btn text-white py-2.5 rounded-xl text-xs font-bold">📨 Teklifi Gönder</button>
             </div>
         </div>
@@ -762,7 +802,11 @@
         let multiplayerTradeNegotiation = null;
         let multiplayerTradeOfferPendingSessionId = null;
         let multiplayerTradeOfferPendingTimer = null;
+        let multiplayerTradeOfferEditing = false;
+        let localTradeOfferPending = null;
+        let localTradeOfferEditing = false;
         let pendingTradeInviteId = null;
+        let pendingTradeInviteTimer = null;
         let multiplayerDiceRequestPending = false;
         let activeMultiplayerMovementRollId = null;
         let multiplayerRoster = [];
@@ -809,6 +853,15 @@
         let activeCutsceneEffects = []; // Harita üstü şenlik, kırbaç şaklaması vb. görsel sahne efektleri
         let pendingChanceQueue = []; // Aynı turda birden fazla şans hücresine gelinirse sırayla açmak için
         let activeChanceContext = null; // { player, armyIndex, currentCardIndex }
+        let localHodriDuelCleanup = null;
+        let multiplayerArena = null;
+        let multiplayerArenaLocalDraft = null;
+        let multiplayerArenaFinishCallback = null;
+        let multiplayerArenaActionPending = false;
+        let multiplayerArenaTimer = null;
+        let multiplayerHodriDuel = null;
+        let multiplayerHodriDuelTimer = null;
+        let multiplayerHodriDuelActionPending = false;
         let lazContractorCardUsedInGame = false; // "Bu müteahhit Laz mı?" kartı bir oyunda sadece 1 kez çekilebilir
         let tradeNonAggressionPacts = []; // { playerA, playerB, expiresAfterTurnOfPlayerId, readyToExpireNextTurnStart }
         let camera = { x: 0, y: 0, zoom: 0.85 };
@@ -3136,6 +3189,8 @@
             { id: 'OPPORTUNITY', name: '✨ Fırsat Kartı', desc: 'Desteden "Saldıranı Öldür" ve "Fırsat Kartı" çıkartılır. Saldıran tekrar kart çeker!' },
             { id: 'RAVAGE', name: '🔥 Harap Et', desc: 'Ordu: 1 tur donar | Duvar: 1 tur geçilebilir | Bina/Şehir: 2 turluk gelire el konulur, 1 tur gelir üretmez.' }
         ];
+        const ARENA_COMBAT_DECK = ['KILL_ATTACKER', 'KILL_DEFENDER', 'DRAW_1']
+            .map(cardId => BASE_COMBAT_DECK.find(card => card.id === cardId));
 
         function triggerCombat(attacker, armyIndex, targetObj, targetType, defenderId, isOpportunityRedraw = false) {
             if (!isOpportunityRedraw && attacker && hasTradeNonAggressionPact(attacker.id, defenderId)) {
@@ -3178,16 +3233,17 @@
                 phase: 'PREVIEW_OPEN',
                 drawnCard: null,
                 drawTwoPickOne,
-                drawnIndices: []
+                drawnIndices: [],
+                manuallyShuffled: false
             };
 
             const modal = document.getElementById('combat-modal');
             document.getElementById('combat-title').textContent = `⚔️ ${attacker.name} vs ${players[defenderId]?.name || 'Savunma'}`;
             document.getElementById('combat-subtitle').textContent = isOpportunityRedraw
-                ? '✨ Fırsat Kartı Aktif! Desteden "Saldıranı Öldür" çıkarıldı. Kartları inceleyip kapatın.'
+                ? `✨ Fırsat Kartı Aktif! ${currentCombat.defender.name} desteyi karıştıracak; ${attacker.name} kart çekecek.`
                 : (drawTwoPickOne
-                    ? '🔥 Askerler Motive! Kartları inceleyip kapatın; ardından 2 farklı kart çekip istediğinizi seçeceksiniz!'
-                    : 'Savunanın Savaş Destesi açık olarak gösteriliyor. İnceledikten sonra kapatıp karıştırın!');
+                    ? `🔥 ${currentCombat.defender.name} kartları sürükleyip sıralayabilir veya karıştırabilir; ${attacker.name} 2 farklı kart çekip birini seçecek.`
+                    : `Savunan ${currentCombat.defender.name} kartları sürükleyip sıralayabilir veya karıştırabilir; saldıran ${attacker.name} kapalı kartlardan çekecek.`);
 
             document.getElementById('combat-result-box').classList.add('hidden');
             const lsStageReset = document.getElementById('combat-lifesaver-stage');
@@ -3196,26 +3252,81 @@
                 lsStageReset.innerHTML = '';
             }
             document.getElementById('combat-shuffle-btn').classList.remove('hidden');
+            document.getElementById('combat-draw-btn').classList.remove('hidden');
             document.getElementById('combat-opportunity-btn').classList.add('hidden');
             document.getElementById('combat-close-btn').classList.add('hidden');
 
             renderCombatCardsGrid();
+            updateCombatRoleControls();
             modal.classList.remove('hidden');
+        }
+
+        function getCombatControllerPlayer() {
+            if (!currentCombat) return null;
+            if (currentCombat.phase === 'PREVIEW_OPEN') return currentCombat.defender;
+            if (currentCombat.phase === 'REVEALED' && currentCombat.drawnCard) {
+                const card = currentCombat.drawnCard;
+                if (!currentCombat.lifesaverResolved && card.id === 'KILL_ATTACKER' &&
+                    currentCombat.attacker.heldCards?.some(held => held.id === 'pos_50_lifesaver_combat_shield')) {
+                    return currentCombat.attacker;
+                }
+                if (!currentCombat.lifesaverResolved && card.id === 'KILL_DEFENDER' &&
+                    currentCombat.defender.heldCards?.some(held => held.id === 'pos_50_lifesaver_combat_shield')) {
+                    return currentCombat.defender;
+                }
+            }
+            return currentCombat.attacker;
+        }
+
+        function canControlCombat() {
+            return !multiplayerSession ||
+                (getCombatControllerPlayer()?.peerId === multiplayerPeerId && !multiplayerAwaitingCommit);
+        }
+
+        function updateCombatRoleControls() {
+            const shuffleButton = document.getElementById('combat-shuffle-btn');
+            const drawButton = document.getElementById('combat-draw-btn');
+            const closeButton = document.getElementById('combat-close-btn');
+            const lifesaverButtons = [
+                document.getElementById('btn-use-lifesaver-now'),
+                document.getElementById('btn-skip-lifesaver-now')
+            ];
+            [shuffleButton, drawButton, closeButton, ...lifesaverButtons].forEach(button => {
+                if (!button) return;
+                button.disabled = multiplayerSession && !canControlCombat();
+                button.title = button.disabled
+                    ? `Bu aşamada ${getCombatControllerPlayer()?.name || 'ilgili oyuncu'} karar veriyor.`
+                    : '';
+            });
         }
 
         function renderCombatCardsGrid() {
             const gridEl = document.getElementById('combat-cards-grid');
             gridEl.innerHTML = '';
             if (!currentCombat) return;
+            const canChooseCard = canControlCombat();
+            const isPreview = currentCombat.phase === 'PREVIEW_OPEN';
+            document.getElementById('combat-shuffle-btn').classList.toggle('hidden', !isPreview);
+            document.getElementById('combat-draw-btn').classList.toggle('hidden', !isPreview);
 
             currentCombat.deck.forEach((card, idx) => {
                 if (currentCombat.phase === 'PREVIEW_OPEN') {
-                    gridEl.innerHTML += `
-                        <div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-2.5 text-center flex flex-col justify-between min-h-[110px]">
-                            <div class="text-xs font-bold text-amber-400">${card.name}</div>
-                            <div class="text-[10px] text-slate-300 leading-tight mt-1">${card.desc}</div>
-                        </div>
-                    `;
+                    if (canChooseCard) {
+                        gridEl.innerHTML += `
+                            <button type="button" draggable="true" ondragstart="startCombatCardDrag(event, ${idx})" ondragover="event.preventDefault()" ondrop="dropCombatCard(event, ${idx})" class="combat-card-shuffling bg-slate-900/95 border border-amber-500/40 rounded-xl p-2.5 text-center flex flex-col justify-between min-h-[110px] cursor-grab active:cursor-grabbing">
+                                <div class="text-xs font-bold text-amber-400">${card.name}</div>
+                                <div class="text-[10px] text-slate-300 leading-tight mt-1">${card.desc}</div>
+                                <span class="mt-1 text-[9px] text-amber-300/70">Sürükleyerek sırala</span>
+                            </button>
+                        `;
+                    } else {
+                        gridEl.innerHTML += `
+                            <div aria-label="Kapalı savaş kartı" class="combat-card-shuffling card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[110px] shadow-lg">
+                                <span class="text-2xl mb-1">⚔️</span>
+                                <span class="text-[10px] font-bold text-amber-200">KAPALI</span>
+                            </div>
+                        `;
+                    }
                 } else if (currentCombat.phase === 'FACE_DOWN') {
                     const isAlreadyOpenedFirst = currentCombat.drawTwoPickOne && currentCombat.drawnIndices.includes(idx);
                     if (isAlreadyOpenedFirst) {
@@ -3228,7 +3339,7 @@
                         `;
                     } else {
                         gridEl.innerHTML += `
-                            <button onclick="selectCombatCard(${idx})" class="card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[110px] cursor-pointer shadow-lg">
+                            <button onclick="selectCombatCard(${idx})" ${canChooseCard ? '' : 'disabled'} class="combat-card-shuffling card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[110px] cursor-pointer shadow-lg disabled:opacity-70">
                                 <span class="text-2xl mb-1">⚔️</span>
                                 <span class="text-[11px] font-bold text-amber-200 uppercase tracking-wider">KART #${idx + 1}</span>
                                 <span class="text-[9px] text-amber-300/80 mt-0.5">${currentCombat.drawTwoPickOne && currentCombat.drawnIndices.length === 1 ? '2. Kart İçin Tıkla' : 'Çekmek İçin Tıkla'}</span>
@@ -3246,7 +3357,7 @@
                                     <div class="text-xs font-bold text-amber-300">${card.name}</div>
                                     <div class="text-[10px] text-slate-200 leading-tight mt-1">${card.desc}</div>
                                 </div>
-                                <button onclick="confirmMotivatedCombatCard(${idx})" class="mt-2 gold-btn text-white font-bold py-1 px-2 rounded-lg text-[10px] w-full">
+                                <button onclick="confirmMotivatedCombatCard(${idx})" ${canChooseCard ? '' : 'disabled'} class="mt-2 gold-btn text-white font-bold py-1 px-2 rounded-lg text-[10px] w-full disabled:opacity-50">
                                     ✨ Bunu Say!
                                 </button>
                             </div>
@@ -3272,20 +3383,56 @@
             });
         }
 
-        function flipAndShuffleCombatCards() {
-            if (!currentCombat) return;
+        function shuffleCombatCards() {
+            if (!currentCombat || currentCombat.phase !== 'PREVIEW_OPEN' || !canControlCombat()) return;
             playSFX('card_flip');
             currentCombat.deck.sort(() => Math.random() - 0.5);
-            currentCombat.phase = 'FACE_DOWN';
-            document.getElementById('combat-shuffle-btn').classList.add('hidden');
-            document.getElementById('combat-subtitle').textContent = currentCombat.drawTwoPickOne
-                ? '🔥 Askerler Motive! Kapalı kartlardan 2 FARKLI kart açın ve istediğinizi seçin (1. kartı seçin).'
-                : 'Kartlar kapatıldı ve karıştırıldı! Saldıran oyuncu 1 kart seçsin.';
+            currentCombat.manuallyShuffled = false;
+            document.getElementById('combat-subtitle').textContent =
+                `🔀 Savunan ${currentCombat.defender.name} desteyi karıştırıyor.`;
             renderCombatCardsGrid();
+            scheduleMultiplayerSync();
+        }
+
+        function drawCombatCards() {
+            if (!currentCombat || currentCombat.phase !== 'PREVIEW_OPEN' || !canControlCombat()) return;
+            playSFX('card_flip');
+            currentCombat.phase = 'FACE_DOWN';
+            document.getElementById('combat-subtitle').textContent = currentCombat.drawTwoPickOne
+                ? `🔥 ${currentCombat.attacker.name}, kapalı desteden 2 farklı kart çekip birini seç.`
+                : `🂠 Kartlar kapandı. ${currentCombat.attacker.name} bir kart seçsin.`;
+            renderCombatCardsGrid();
+            updateCombatRoleControls();
+            scheduleMultiplayerSync();
+        }
+
+        function startCombatCardDrag(event, cardIndex) {
+            if (!currentCombat || currentCombat.phase !== 'PREVIEW_OPEN' || !canControlCombat()) {
+                event.preventDefault();
+                return;
+            }
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', String(cardIndex));
+        }
+
+        function dropCombatCard(event, targetIndex) {
+            event.preventDefault();
+            if (!currentCombat || currentCombat.phase !== 'PREVIEW_OPEN' || !canControlCombat()) return;
+            const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
+            if (!Number.isSafeInteger(sourceIndex) || sourceIndex < 0 ||
+                sourceIndex >= currentCombat.deck.length || sourceIndex === targetIndex) return;
+            [currentCombat.deck[sourceIndex], currentCombat.deck[targetIndex]] =
+                [currentCombat.deck[targetIndex], currentCombat.deck[sourceIndex]];
+            currentCombat.manuallyShuffled = true;
+            document.getElementById('combat-subtitle').textContent =
+                `🔀 Savunan ${currentCombat.defender.name} desteyi düzenliyor.`;
+            playSFX('card_flip');
+            renderCombatCardsGrid();
+            scheduleMultiplayerSync();
         }
 
         function selectCombatCard(idx) {
-            if (!currentCombat || currentCombat.phase !== 'FACE_DOWN') return;
+            if (!currentCombat || currentCombat.phase !== 'FACE_DOWN' || !canControlCombat()) return;
 
             if (currentCombat.drawTwoPickOne) {
                 if (currentCombat.drawnIndices.includes(idx)) return;
@@ -3307,11 +3454,12 @@
         }
 
         function confirmMotivatedCombatCard(idx) {
-            if (!currentCombat || currentCombat.phase !== 'CHOOSE_FROM_TWO') return;
+            if (!currentCombat || currentCombat.phase !== 'CHOOSE_FROM_TWO' || !canControlCombat()) return;
             finalizeCombatCardSelection(idx);
         }
 
         function finalizeCombatCardSelection(idx) {
+            if (!currentCombat || !canControlCombat()) return;
             playSFX('card_flip');
             currentCombat.phase = 'REVEALED';
             currentCombat.pickedIdx = idx;
@@ -3340,7 +3488,7 @@
             // "50. Hayat kurtaran" (pos_50_lifesaver_combat_shield) kontrolü:
             // Saldıran ölecekse (KILL_ATTACKER) ve saldıranın envanterinde Hayat Kurtaran varsa
             // veya Savunan ölecekse (KILL_DEFENDER) ve savunanın envanterinde Hayat Kurtaran varsa interaktif sor!
-            const { attacker, defender, armyIndex, targetObj } = currentCombat;
+            const { attacker, defender } = currentCombat;
             let endangeredPlayer = null;
             if (card.id === 'KILL_ATTACKER' && attacker && attacker.heldCards) {
                 if (attacker.heldCards.some(c => c.id === 'pos_50_lifesaver_combat_shield')) {
@@ -3359,58 +3507,64 @@
                         <div class="text-xs font-extrabold text-emerald-300">🛡️ ${endangeredPlayer.name} Envanterinde [50. Hayat kurtaran] Kartı Var!</div>
                         <div class="text-[11px] text-slate-200">Bu ölümcül savaş sonucunu iptal edip ölümden kurtulmak için <b>Hayat Kurtaran</b> kartını şimdi kullanmak ister misin?</div>
                         <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
-                            <button id="btn-use-lifesaver-now" class="gold-btn text-white font-bold py-2 px-4 rounded-xl text-xs shadow-lg">
+                            <button id="btn-use-lifesaver-now" onclick="resolveCombatLifesaver(true)" class="gold-btn text-white font-bold py-2 px-4 rounded-xl text-xs shadow-lg">
                                 🛡️ Hayat Kurtaran Kartını Kullan (Ölümden Kurtul!)
                             </button>
-                            <button id="btn-skip-lifesaver-now" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold py-2 px-4 rounded-xl text-xs">
+                            <button id="btn-skip-lifesaver-now" onclick="resolveCombatLifesaver(false)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold py-2 px-4 rounded-xl text-xs">
                                 ❌ Kartı Sakla (Sonucu Kabul Et)
                             </button>
                         </div>
                     </div>
                 `;
 
-                document.getElementById('btn-use-lifesaver-now').onclick = () => {
-                    playSFX('victory');
-                    const cIdx = endangeredPlayer.heldCards.findIndex(c => c.id === 'pos_50_lifesaver_combat_shield');
-                    if (cIdx !== -1) endangeredPlayer.heldCards.splice(cIdx, 1);
-
-                    lsStage.innerHTML = `
-                        <div class="text-xs font-bold text-emerald-300">🛡️✨ ${endangeredPlayer.name} [Hayat kurtaran] kartını kullandı ve bu savaştan sağ kurtuldu!</div>
-                    `;
-                    document.getElementById('combat-card-desc').textContent = `🛡️ HAYAT KURTARAN KULLANILDI! ${endangeredPlayer.name} ölümden döndü, hiçbir birim veya şehir yok olmadı!`;
-
-                    const refArmy = attacker.armies[armyIndex];
-                    const fxQ = (endangeredPlayer.id === attacker.id && refArmy) ? refArmy.q : (targetObj?.q ?? 0);
-                    const fxR = (endangeredPlayer.id === attacker.id && refArmy) ? refArmy.r : (targetObj?.r ?? 0);
-                    const px = hexToPixel(fxQ, fxR);
-                    activeCutsceneEffects.push({
-                        x: px.x,
-                        y: px.y - 28,
-                        text: '🛡️ HAYAT KURTARAN! ÖLÜMDEN DÖNDÜ!',
-                        expires: performance.now() + 2400
-                    });
-
-                    addLog(`🛡️✨ <b>Hayat Kurtaran (${endangeredPlayer.name}):</b> Savaşta <b>[${card.name}]</b> çıkmasına rağmen envanterindeki <b>[50. Hayat kurtaran]</b> kartını kullanarak ölümden kurtuldu!`);
-                    currentCombat.attacker.hasAttackedThisTurn = true;
-                    document.getElementById('combat-close-btn').classList.remove('hidden');
-                    updateUI();
-                    drawMap();
-                };
-
-                document.getElementById('btn-skip-lifesaver-now').onclick = () => {
-                    playSFX('click');
-                    lsStage.classList.add('hidden');
-                    lsStage.innerHTML = '';
-                    applyCombatCardOutcome(card);
-                    currentCombat.attacker.hasAttackedThisTurn = true;
-                    document.getElementById('combat-close-btn').classList.remove('hidden');
-                };
+                updateCombatRoleControls();
                 return;
             }
 
             applyCombatCardOutcome(card);
             currentCombat.attacker.hasAttackedThisTurn = true;
             document.getElementById('combat-close-btn').classList.remove('hidden');
+            updateCombatRoleControls();
+        }
+
+        function resolveCombatLifesaver(useCard) {
+            if (!currentCombat || !canControlCombat()) return;
+            const card = currentCombat.drawnCard;
+            const endangeredPlayer = getCombatControllerPlayer();
+            if (!card || !endangeredPlayer ||
+                !endangeredPlayer.heldCards?.some(held => held.id === 'pos_50_lifesaver_combat_shield')) return;
+            const stage = document.getElementById('combat-lifesaver-stage');
+            currentCombat.lifesaverResolved = true;
+            if (useCard) {
+                playSFX('victory');
+                const cardIndex = endangeredPlayer.heldCards.findIndex(held => held.id === 'pos_50_lifesaver_combat_shield');
+                if (cardIndex !== -1) endangeredPlayer.heldCards.splice(cardIndex, 1);
+                stage.innerHTML = `<div class="text-xs font-bold text-emerald-300">🛡️✨ ${endangeredPlayer.name} [Hayat kurtaran] kartını kullandı ve bu savaştan sağ kurtuldu!</div>`;
+                document.getElementById('combat-card-desc').textContent =
+                    `🛡️ HAYAT KURTARAN KULLANILDI! ${endangeredPlayer.name} ölümden döndü, hiçbir birim veya şehir yok olmadı!`;
+                const { attacker, armyIndex, targetObj } = currentCombat;
+                const army = attacker.armies[armyIndex];
+                const fxQ = (endangeredPlayer.id === attacker.id && army) ? army.q : (targetObj?.q ?? 0);
+                const fxR = (endangeredPlayer.id === attacker.id && army) ? army.r : (targetObj?.r ?? 0);
+                const px = hexToPixel(fxQ, fxR);
+                activeCutsceneEffects.push({
+                    x: px.x,
+                    y: px.y - 28,
+                    text: '🛡️ HAYAT KURTARAN! ÖLÜMDEN DÖNDÜ!',
+                    expires: performance.now() + 2400
+                });
+                addLog(`🛡️✨ <b>Hayat Kurtaran (${endangeredPlayer.name}):</b> Savaşta <b>[${card.name}]</b> çıkmasına rağmen envanterindeki <b>[50. Hayat kurtaran]</b> kartını kullanarak ölümden kurtuldu!`);
+            } else {
+                playSFX('click');
+                stage.classList.add('hidden');
+                stage.innerHTML = '';
+                applyCombatCardOutcome(card);
+            }
+            currentCombat.attacker.hasAttackedThisTurn = true;
+            document.getElementById('combat-close-btn').classList.remove('hidden');
+            updateCombatRoleControls();
+            updateUI();
+            drawMap();
         }
 
         function redrawAfterOpportunity() {
@@ -4298,6 +4452,10 @@
                     }
 
                     let selectedRival = rivals[0];
+                    let localDuelRolls = {};
+                    let localDuelTimer = null;
+                    let isLocalDuelRolling = false;
+                    let localDuelTieMessage = '';
 
                     const renderSpyStage = () => {
                         const rivalBtns = rivals.map(r => {
@@ -5042,13 +5200,49 @@
                         return;
                     }
 
+                    if (multiplayerSession) {
+                        let selectedRival = rivals[0];
+                        const renderChallengeSetup = () => {
+                            stage.innerHTML = `<div class="space-y-3">
+                                <div class="text-[11px] font-bold text-amber-300">1. Adım: Hodri Meydanı için rakip seç</div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => `
+                                    <button data-rival-id="${rival.id}" class="hodri-rival-btn px-3 py-2 rounded-xl border text-left flex items-center justify-between ${selectedRival.id === rival.id ? 'bg-amber-500/20 border-amber-400 text-white' : 'bg-slate-900/80 border-slate-700 text-slate-300'}">
+                                        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:${rival.color}"></span>${rival.name}</span>
+                                        <span class="text-amber-300">🪙${rival.gold}</span>
+                                    </button>`).join('')}</div>
+                                <div class="text-[11px] text-slate-300">İkiniz de kendi zarınızı atın. İlk atıştan sonra rakip 5 saniyede atmazsa onun zarı otomatik atılır.</div>
+                                <button id="btn-start-hodri-duel" class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs">⚔️ Düelloyu başlat</button>
+                            </div>`;
+                            stage.querySelectorAll('.hodri-rival-btn').forEach(button => {
+                                button.onclick = () => {
+                                    selectedRival = rivals.find(item => item.id === Number(button.dataset.rivalId)) || rivals[0];
+                                    renderChallengeSetup();
+                                };
+                            });
+                            document.getElementById('btn-start-hodri-duel').onclick = () => {
+                                submitMultiplayerHodriDuelAction('START', { rivalId: selectedRival.id });
+                            };
+                        };
+                        renderChallengeSetup();
+                        return;
+                    }
+
                     let selectedRival = rivals[0];
+                    let localDuelRolls = {};
+                    let localDuelTimer = null;
+                    let isLocalDuelRolling = false;
+                    let localDuelTieMessage = '';
+                    const duelCardIndex = activeChanceContext?.currentCardIndex;
+                    localHodriDuelCleanup = () => {
+                        if (localDuelTimer) clearTimeout(localDuelTimer);
+                        localDuelTimer = null;
+                    };
 
                     const renderDuelStage = () => {
                         const rivalBtns = rivals.map(r => {
                             const isSel = selectedRival && selectedRival.id === r.id;
                             return `
-                                <button data-rival-id="${r.id}" class="duel-rival-btn px-3 py-2 rounded-xl border text-left transition flex items-center justify-between gap-2 ${isSel ? 'bg-amber-500/20 border-amber-400 text-white shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-slate-800'}">
+                                <button data-rival-id="${r.id}" ${Object.keys(localDuelRolls).length ? 'disabled' : ''} class="duel-rival-btn px-3 py-2 rounded-xl border text-left transition flex items-center justify-between gap-2 disabled:opacity-50 ${isSel ? 'bg-amber-500/20 border-amber-400 text-white shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-slate-800'}">
                                     <div class="flex items-center gap-2 truncate">
                                         <span class="w-3 h-3 rounded-full shrink-0" style="background:${r.color}"></span>
                                         <span class="text-xs font-bold truncate">${r.name}</span>
@@ -5067,17 +5261,17 @@
                                 <div class="flex items-center justify-center gap-6 w-full">
                                     <div class="flex flex-col items-center gap-1">
                                         <span class="text-[11px] font-bold" style="color:${player.color}">${player.name}</span>
-                                        <div id="duel-my-die" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-700 border-2 border-white shadow-xl flex items-center justify-center text-2xl font-extrabold text-slate-950">🎲</div>
+                                        <div id="duel-my-die" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-700 border-2 border-white shadow-xl flex items-center justify-center text-2xl font-extrabold text-slate-950">${localDuelRolls[player.id]?.value || '🎲'}</div>
                                     </div>
                                     <div class="text-sm font-extrabold text-amber-400">VS</div>
                                     <div class="flex flex-col items-center gap-1">
                                         <span class="text-[11px] font-bold" style="color:${selectedRival.color}">${selectedRival.name}</span>
-                                        <div id="duel-rival-die" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-slate-900 border-2 border-rose-200 shadow-xl flex items-center justify-center text-2xl font-extrabold text-white">🎲</div>
+                                        <div id="duel-rival-die" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-slate-900 border-2 border-rose-200 shadow-xl flex items-center justify-center text-2xl font-extrabold text-white">${localDuelRolls[selectedRival.id]?.value || '🎲'}</div>
                                     </div>
                                 </div>
-                                <div id="duel-status-msg" class="text-[11px] text-slate-300">En yüksek zarı atan karşı taraftan <b>2 🪙 Altın</b> kapar!</div>
-                                <button id="btn-roll-duel-dice" class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
-                                    🎲⚔️ Düello Zarlarını At!
+                                <div id="duel-status-msg" class="text-[11px] text-slate-300">${localDuelTieMessage || (localDuelRolls[player.id] && localDuelRolls[selectedRival.id] ? 'Zarlar karşılaştırılıyor…' : localDuelRolls[player.id] ? `Sıra ${selectedRival.name} oyuncusunda. 5 saniyede atmazsa zarı otomatik atılacak.` : 'Önce kartı çeken oyuncu kendi zarını atar.')}</div>
+                                <button id="btn-roll-duel-dice" ${isLocalDuelRolling || (localDuelRolls[player.id] && localDuelRolls[selectedRival.id]) ? 'disabled' : ''} class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
+                                    🎲 ${localDuelRolls[player.id] ? `${selectedRival.name} zarını at` : 'Kendi zarını at'}
                                 </button>
                             </div>
                         `;
@@ -5094,42 +5288,57 @@
                         const rollBtn = document.getElementById('btn-roll-duel-dice');
                         const myDieEl = document.getElementById('duel-my-die');
                         const rivalDieEl = document.getElementById('duel-rival-die');
-                        const statusEl = document.getElementById('duel-status-msg');
-
-                        const startDuelRoll = () => {
+                        const rollFor = (roller, automatic = false) => {
+                            if (isLocalDuelRolling || localDuelRolls[roller.id] ||
+                                activeChanceContext?.player?.id !== player.id ||
+                                activeChanceContext.currentCardIndex !== duelCardIndex ||
+                                document.getElementById('chance-modal').classList.contains('hidden')) return;
+                            isLocalDuelRolling = true;
                             rollBtn.disabled = true;
-                            rollBtn.textContent = 'Zarlar Dönüyor...';
-                            stage.querySelectorAll('.duel-rival-btn').forEach(b => b.disabled = true);
-                            myDieEl.classList.add('dice-rolling');
-                            rivalDieEl.classList.add('dice-rolling');
-
+                            rollBtn.textContent = automatic ? 'Rakibin zarı otomatik atılıyor…' : `${roller.name} zar atıyor…`;
+                            stage.querySelectorAll('.duel-rival-btn').forEach(button => button.disabled = true);
+                            const dieEl = roller.id === player.id ? myDieEl : rivalDieEl;
+                            dieEl.classList.add('dice-rolling');
                             const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
                             let ticks = 0;
                             const iv = setInterval(() => {
-                                const r1 = Math.floor(Math.random() * 6);
-                                const r2 = Math.floor(Math.random() * 6);
-                                myDieEl.textContent = faces[r1];
-                                rivalDieEl.textContent = faces[r2];
+                                dieEl.textContent = faces[Math.floor(Math.random() * 6)];
                                 playSFX('dice_tick');
-                                ticks++;
-                                if (ticks >= 10) {
+                                if (++ticks >= 10) {
                                     clearInterval(iv);
-                                    const myRoll = Math.floor(Math.random() * 6) + 1;
-                                    const rivalRoll = Math.floor(Math.random() * 6) + 1;
-                                    myDieEl.classList.remove('dice-rolling');
-                                    rivalDieEl.classList.remove('dice-rolling');
-                                    myDieEl.textContent = `${faces[myRoll - 1]} ${myRoll}`;
-                                    rivalDieEl.textContent = `${faces[rivalRoll - 1]} ${rivalRoll}`;
+                                    const value = 1 + Math.floor(Math.random() * 6);
+                                    localDuelRolls[roller.id] = { value, automatic };
+                                    dieEl.classList.remove('dice-rolling');
+                                    dieEl.textContent = `${faces[value - 1]} ${value}`;
+                                    isLocalDuelRolling = false;
+                                    playSFX('dice_done');
+                                    if (!localDuelRolls[player.id] && !localDuelTimer) {
+                                        localDuelTimer = setTimeout(() => {
+                                            localDuelTimer = null;
+                                            rollFor(player, true);
+                                        }, 5000);
+                                    } else if (!localDuelRolls[selectedRival.id] && !localDuelTimer) {
+                                        localDuelTimer = setTimeout(() => {
+                                            localDuelTimer = null;
+                                            rollFor(selectedRival, true);
+                                        }, 5000);
+                                    }
+                                    renderDuelStage();
+                                    if (!localDuelRolls[player.id] || !localDuelRolls[selectedRival.id]) return;
 
+                                    const myRoll = localDuelRolls[player.id].value;
+                                    const rivalRoll = localDuelRolls[selectedRival.id].value;
                                     if (myRoll === rivalRoll) {
                                         playSFX('click');
-                                        statusEl.innerHTML = `<span class="text-amber-300 font-bold">⚖️ Berabere (${myRoll} - ${rivalRoll})! Kazanan çıkana kadar tekrar zar atın!</span>`;
-                                        rollBtn.disabled = false;
-                                        rollBtn.textContent = '🎲🔄 Berabere! Tekrar Zar At!';
+                                        localDuelTieMessage = `⚖️ Berabere (${myRoll} - ${rivalRoll})! İkiniz de yeniden zar atın.`;
+                                        localDuelRolls = {};
+                                        setTimeout(() => {
+                                            localDuelTieMessage = '';
+                                            renderDuelStage();
+                                        }, 900);
                                         return;
                                     }
 
-                                    rollBtn.classList.add('hidden');
                                     const myCity = grid.get(player.cityKey);
                                     const rivalCity = grid.get(selectedRival.cityKey);
 
@@ -5174,6 +5383,24 @@
                                     }
                                 }
                             }, 70);
+                        };
+
+                        const startDuelRoll = () => {
+                            if (isLocalDuelRolling) return;
+                            const roller = localDuelRolls[player.id] ? selectedRival : player;
+                            if (roller === player && !localDuelRolls[selectedRival.id]) {
+                                localDuelTimer = setTimeout(() => {
+                                    localDuelTimer = null;
+                                    if (activeChanceContext?.player?.id !== player.id ||
+                                        activeChanceContext.currentCardIndex !== duelCardIndex ||
+                                        document.getElementById('chance-modal').classList.contains('hidden')) return;
+                                    if (!localDuelRolls[selectedRival.id]) rollFor(selectedRival, true);
+                                }, 5000);
+                            } else if (localDuelTimer) {
+                                clearTimeout(localDuelTimer);
+                                localDuelTimer = null;
+                            }
+                            rollFor(roller);
                         };
 
                         rollBtn.onclick = startDuelRoll;
@@ -6385,8 +6612,916 @@
             }
         ];
 
+        const CHANCE_CARD_ROLE_LABELS = {
+            pos_2_wall_tax: 'Hedef rolü: en çok duvara sahip rakip krallık.',
+            pos_4_feast: 'Ev sahibi rolü: kartı çeken oyuncu • Misafir rolü: diğer yaşayan krallıklar.',
+            pos_8_whip_freeze: 'Hedef rolü: seçilen rakip ordu.',
+            pos_10_border_trespass_fine: 'Hedef rolü: tur sırasındaki önceki krallık.',
+            pos_14_teleport_near_enemy: 'Hedef rolü: seçilen rakip ordu.',
+            pos_15_who_left_vault_open: 'Casus rolü: kartı çeken oyuncu • Hedef rolü: seçilen rakip krallık.',
+            pos_25_pity_gold_gift: 'Bağışçı rolü: diğer yaşayan krallıklar • Alıcı rolü: kartı çeken oyuncu.',
+            pos_26_forfeit_war_tax: 'Hedef rolü: son savaşılmış veya seçilen rakip krallık.',
+            pos_31_high_roll_duel_2g: 'Düellocu rolü: kartı çeken oyuncu • Rakip düellocu: seçilen krallık.',
+            pos_39_arena_betting_games: 'Savaşçı rolleri: kartı çeken oyuncu ve seçilen rakip • Bahisçi rolü: diğer krallıklar.',
+            mix_44_anniversary_gift_next_player: 'Hediye veren rolü: kartı çeken oyuncu • Alıcı rolü: sıradaki yaşayan krallık.',
+            mix_45_generous_custom_gift: 'Bağışçı rolü: kartı çeken oyuncu • Alıcı rolü: seçilen krallık.',
+            mix_49_alms_3g_to_poorest: 'Sadaka veren rolü: kartı çeken oyuncu • Alıcı rolü: en az altını olan krallık.'
+        };
+
+        function getChanceCardRoleLabel(card) {
+            return card ? CHANCE_CARD_ROLE_LABELS[card.id] || '' : '';
+        }
+
+        function canLocalPlayerRollInHodriDuel() {
+            if (!multiplayerHodriDuel || multiplayerHodriDuel.stage !== 'ROLLING') return false;
+            const player = players.find(item => item.peerId === multiplayerPeerId);
+            return !!player &&
+                [multiplayerHodriDuel.challengerId, multiplayerHodriDuel.rivalId].includes(player.id) &&
+                !multiplayerHodriDuel.rolls[player.id];
+        }
+
+        function submitMultiplayerHodriDuelAction(action, details = {}) {
+            if (multiplayerHodriDuelActionPending) return;
+            if (action === 'ROLL' && !canLocalPlayerRollInHodriDuel()) return;
+            const activeCard = activeChanceContext
+                ? CHANCE_CARDS_DB[activeChanceContext.currentCardIndex]
+                : null;
+            if (action === 'START' && (!activeChanceContext ||
+                activeChanceContext.player?.peerId !== multiplayerPeerId ||
+                activeCard?.id !== 'pos_31_high_roll_duel_2g')) return;
+            multiplayerHodriDuelActionPending = true;
+            const packet = {
+                type: 'HODRI_DUEL_ACTION',
+                peerId: multiplayerPeerId,
+                action,
+                ...details
+            };
+            if (action === 'START') {
+                packet.sessionId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            } else if (multiplayerHodriDuel) {
+                packet.sessionId = multiplayerHodriDuel.sessionId;
+            }
+            if (multiplayerIsHost) handleHostMultiplayerHodriDuelAction(packet, multiplayerPeerId);
+            else if (!sendReliableMultiplayerPacket(packet)) {
+                multiplayerHodriDuelActionPending = false;
+                setMultiplayerNotice('Hodri Meydanı hamlesi host’a gönderilemedi. Bağlantıyı kontrol edin.', 'rose');
+            }
+        }
+
+        function clearMultiplayerHodriDuelTimer() {
+            if (multiplayerHodriDuelTimer !== null) {
+                clearTimeout(multiplayerHodriDuelTimer);
+                multiplayerHodriDuelTimer = null;
+            }
+        }
+
+        function scheduleMultiplayerHodriDuelTimer(duel, callback, delay) {
+            clearMultiplayerHodriDuelTimer();
+            multiplayerHodriDuelTimer = setTimeout(() => {
+                multiplayerHodriDuelTimer = null;
+                if (multiplayerHodriDuel !== duel) return;
+                callback();
+            }, delay);
+        }
+
+        function renderMultiplayerHodriDuel() {
+            if (!multiplayerHodriDuel) return;
+            const stage = document.getElementById('chance-interactive-stage');
+            if (!stage) return;
+            const duel = multiplayerHodriDuel;
+            const challenger = players.find(item => item.id === duel.challengerId);
+            const rival = players.find(item => item.id === duel.rivalId);
+            const localPlayer = players.find(item => item.peerId === multiplayerPeerId);
+            const esc = value => String(value || '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[char]);
+            const diceFace = roll => roll ? `⚄ ${roll.value}${roll.automatic ? ' (otomatik)' : ''}` : '🎲';
+            const canRoll = canLocalPlayerRollInHodriDuel() && !multiplayerHodriDuelActionPending;
+            const localRoll = localPlayer ? duel.rolls[localPlayer.id] : null;
+            const status = duel.stage === 'RESULT'
+                ? `<div class="text-sm font-bold text-amber-300">${esc(duel.resultText)}</div>`
+                : duel.stage === 'REVEAL'
+                    ? '<div class="text-xs text-amber-300">Zarlar karşılaştırılıyor…</div>'
+                    : localRoll
+                        ? '<div class="text-xs text-emerald-300">Zarın atıldı; rakibin atışı bekleniyor.</div>'
+                        : canRoll
+                            ? `<button data-hodri-action="ROLL" class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs">🎲 Kendi zarını at</button>`
+                            : '<div class="text-xs text-slate-300">Düellocuların zar atması bekleniyor…</div>';
+            stage.innerHTML = `<div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 text-center space-y-3">
+                <div class="text-xs font-bold text-amber-300">🎲 HODRİ MEYDANI • Tur ${duel.round}</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/70 border border-amber-500/40 rounded-xl p-3">
+                        <div class="text-xs font-bold text-amber-300">${esc(challenger?.name)}</div>
+                        <div class="arena-die-rolling text-4xl py-2">${diceFace(duel.rolls[duel.challengerId])}</div>
+                    </div>
+                    <div class="bg-slate-950/70 border border-rose-500/40 rounded-xl p-3">
+                        <div class="text-xs font-bold text-rose-300">${esc(rival?.name)}</div>
+                        <div class="arena-die-rolling text-4xl py-2">${diceFace(duel.rolls[duel.rivalId])}</div>
+                    </div>
+                </div>
+                ${duel.lastRoll ? `<div class="text-xs text-slate-300">${esc(duel.lastRoll)}</div>` : ''}
+                ${status}
+            </div>`;
+            const rollButton = stage.querySelector('[data-hodri-action="ROLL"]');
+            if (rollButton) rollButton.addEventListener('click', () => submitMultiplayerHodriDuelAction('ROLL'));
+        }
+
+        function broadcastMultiplayerHodriDuelState() {
+            renderMultiplayerHodriDuel();
+            updateUI();
+            drawMap();
+            if (multiplayerIsHost) {
+                multiplayerVersion++;
+                broadcastMultiplayerPacket({
+                    type: 'GAME_STATE',
+                    version: multiplayerVersion,
+                    snapshot: captureMultiplayerSnapshot()
+                });
+            }
+        }
+
+        function resolveMultiplayerHodriDuel(duel) {
+            const challengerRoll = duel.rolls[duel.challengerId];
+            const rivalRoll = duel.rolls[duel.rivalId];
+            if (challengerRoll.value === rivalRoll.value) {
+                duel.round++;
+                duel.rolls = {};
+                duel.stage = 'ROLLING';
+                duel.lastRoll = `Berabere (${challengerRoll.value} - ${rivalRoll.value}). İkiniz de yeniden zar atın.`;
+                broadcastMultiplayerHodriDuelState();
+                return;
+            }
+
+            const challenger = players.find(item => item.id === duel.challengerId);
+            const rival = players.find(item => item.id === duel.rivalId);
+            const winner = challengerRoll.value > rivalRoll.value ? challenger : rival;
+            const loser = winner.id === challenger.id ? rival : challenger;
+            loser.gold -= Math.min(loser.gold, 2);
+            winner.gold += 2;
+            duel.stage = 'RESULT';
+            duel.resultText = `${winner.name} kazandı ve 2 Altın aldı (${challenger.name}: ${challengerRoll.value}; ${rival.name}: ${rivalRoll.value}).`;
+            duel.lastRoll = '';
+            if (activeChanceContext?.player?.id === challenger.id &&
+                activeChanceContext.currentCardIndex === duel.cardIndex) {
+                completeChanceCardInteractive(challenger, duel.cardIndex, duel.resultText);
+            }
+            broadcastMultiplayerHodriDuelState();
+        }
+
+        function handleHostMultiplayerHodriDuelAction(packet, authenticatedPeerId) {
+            const reject = message => {
+                multiplayerHodriDuelActionPending = false;
+                if (authenticatedPeerId === multiplayerPeerId) {
+                    setMultiplayerNotice(message, 'rose');
+                } else {
+                    broadcastMultiplayerPacket({
+                        type: 'HODRI_DUEL_ACTION_REJECTED',
+                        toPeerId: authenticatedPeerId,
+                        message
+                    });
+                }
+            };
+            if (!packet || !authenticatedPeerId || packet.peerId !== authenticatedPeerId ||
+                !multiplayerRoster.some(item => item.peerId === authenticatedPeerId)) {
+                reject('Hodri Meydanı hamlesi doğrulanamadı.');
+                return;
+            }
+            const actor = players.find(item => item.peerId === authenticatedPeerId && !item.eliminated);
+            if (!actor) {
+                reject('Bu oyuncu düelloya katılamaz.');
+                return;
+            }
+            if (packet.action === 'START') {
+                const card = CHANCE_CARDS_DB[activeChanceContext?.currentCardIndex];
+                const challenger = activeChanceContext?.player;
+                const rival = players.find(item => item.id === Number(packet.rivalId) && !item.eliminated);
+                if (multiplayerHodriDuel || !challenger || actor.id !== challenger.id ||
+                    card?.id !== 'pos_31_high_roll_duel_2g' || !rival || rival.id === challenger.id ||
+                    typeof packet.sessionId !== 'string' || !packet.sessionId || packet.sessionId.length > 128) {
+                    reject('Düello rakibi seçimi geçersiz veya düello zaten sürüyor.');
+                    return;
+                }
+                multiplayerHodriDuel = {
+                    sessionId: packet.sessionId,
+                    cardIndex: activeChanceContext.currentCardIndex,
+                    challengerId: challenger.id,
+                    rivalId: rival.id,
+                    stage: 'ROLLING',
+                    round: 1,
+                    rolls: {},
+                    lastRoll: ''
+                };
+            } else if (packet.action === 'ROLL') {
+                const duel = multiplayerHodriDuel;
+                if (!duel || packet.sessionId !== duel.sessionId || duel.stage !== 'ROLLING' ||
+                    ![duel.challengerId, duel.rivalId].includes(actor.id) || duel.rolls[actor.id]) {
+                    reject('Zarı yalnızca seçilen düellocular, birer kez atabilir.');
+                    return;
+                }
+                duel.rolls[actor.id] = {
+                    value: 1 + Math.floor(Math.random() * 6),
+                    automatic: false
+                };
+                const otherId = actor.id === duel.challengerId ? duel.rivalId : duel.challengerId;
+                if (duel.rolls[otherId]) {
+                    duel.stage = 'REVEAL';
+                    scheduleMultiplayerHodriDuelTimer(duel, () => resolveMultiplayerHodriDuel(duel), 1100);
+                } else {
+                    scheduleMultiplayerHodriDuelTimer(duel, () => {
+                        if (duel.stage !== 'ROLLING') return;
+                        duel.rolls[otherId] = {
+                            value: 1 + Math.floor(Math.random() * 6),
+                            automatic: true
+                        };
+                        duel.stage = 'REVEAL';
+                        broadcastMultiplayerHodriDuelState();
+                        scheduleMultiplayerHodriDuelTimer(duel, () => resolveMultiplayerHodriDuel(duel), 1100);
+                    }, 5000);
+                }
+            } else {
+                reject('Bilinmeyen Hodri Meydanı hamlesi.');
+                return;
+            }
+            multiplayerHodriDuelActionPending = false;
+            broadcastMultiplayerHodriDuelState();
+        }
+
+        function submitMultiplayerArenaAction(action, details = {}) {
+            if (!multiplayerArena || multiplayerArenaActionPending || !canLocalPlayerActInArena()) return;
+            multiplayerArenaActionPending = true;
+            const packet = {
+                type: 'ARENA_ACTION',
+                sessionId: multiplayerArena.sessionId,
+                peerId: multiplayerPeerId,
+                action,
+                ...details
+            };
+            if (multiplayerIsHost) handleHostMultiplayerArenaAction(packet, multiplayerPeerId);
+            else if (!sendMultiplayerPacket(packet)) {
+                multiplayerArenaActionPending = false;
+                setMultiplayerNotice('Arena hamlesi gönderilemedi. Bağlantınızı kontrol edin.', 'rose');
+            }
+        }
+
+        function broadcastMultiplayerArenaState() {
+            renderMultiplayerArena();
+            updateUI();
+            drawMap();
+            if (multiplayerIsHost) {
+                multiplayerVersion++;
+                broadcastMultiplayerPacket({
+                    type: 'GAME_STATE',
+                    sender: multiplayerPeerId,
+                    version: multiplayerVersion,
+                    snapshot: captureMultiplayerSnapshot()
+                });
+            }
+        }
+
+        function settleMultiplayerArena(winnerId, gameSummaryText) {
+            const arena = multiplayerArena;
+            const winner = players.find(item => item.id === winnerId);
+            const loserId = winnerId === arena.challengerId ? arena.defenderId : arena.challengerId;
+            const loser = players.find(item => item.id === loserId);
+            if (!winner || !loser) return;
+            clearMultiplayerArenaTimer();
+            multiplayerArenaActionPending = false;
+
+            const loserPool = { gold: 0, wood: 0, iron: 0 };
+            Object.values(arena.bets).forEach(bet => {
+                if (bet.fighterId === loserId) loserPool[bet.resource] += bet.amount;
+                if (bet.fighterId === winnerId) {
+                    const bettor = players.find(item => item.id === bet.playerId);
+                    if (bettor) bettor[bet.resource] += bet.amount * 2;
+                }
+            });
+            winner.gold += loserPool.gold;
+            winner.wood += loserPool.wood;
+            winner.iron += loserPool.iron;
+            const seizedText = Object.entries(loserPool)
+                .filter(([, amount]) => amount > 0)
+                .map(([resource, amount]) => `${amount}${resource === 'gold' ? '🪙' : resource === 'wood' ? '🪵' : '⛏️'}`)
+                .join(', ') || '0 kaynak';
+            const bettorRewards = Object.values(arena.bets)
+                .filter(bet => bet.fighterId === winnerId && bet.amount > 0)
+                .map(bet => {
+                    const bettor = players.find(item => item.id === bet.playerId);
+                    return `${bettor?.name || 'Oyuncu'}: +${bet.amount * 2}${bet.resource === 'gold' ? '🪙' : bet.resource === 'wood' ? '🪵' : '⛏️'}`;
+                });
+            arena.result = {
+                winnerId,
+                summary: gameSummaryText,
+                seizedText,
+                bettorRewards: bettorRewards.length ? bettorRewards.join(', ') : 'Kimse oynamadı',
+                outcomeText: `🏟️ ${gameSummaryText} sonucunda Arena Şampiyonu ${winner.name} oldu! Karşı tarafa yatırılan (${seizedText}) kaynağın tamamını aldı; kazanana oynayanlar 2 katı ödül kazandı!`
+            };
+            arena.stage = 'RESULT';
+            const city = winner.cityKey ? grid.get(winner.cityKey) : null;
+            if (city) {
+                focusCameraSmoothOnHex(city.q, city.r);
+                const point = hexToPixel(city.q, city.r);
+                activeCutsceneEffects.push({
+                    x: point.x,
+                    y: point.y - 28,
+                    text: `🏟️👑 ARENA ŞAMPİYONU: ${winner.name.toUpperCase()}!`,
+                    expires: performance.now() + 2400
+                });
+            }
+            playSFX('victory');
+            broadcastMultiplayerArenaState();
+        }
+
+        function clearMultiplayerArenaTimer() {
+            if (multiplayerArenaTimer !== null) {
+                clearTimeout(multiplayerArenaTimer);
+                multiplayerArenaTimer = null;
+            }
+        }
+
+        function scheduleMultiplayerArenaTimer(arena, callback, delay) {
+            clearMultiplayerArenaTimer();
+            multiplayerArenaTimer = setTimeout(() => {
+                multiplayerArenaTimer = null;
+                if (multiplayerArena !== arena) return;
+                callback();
+            }, delay);
+        }
+
+        function resolveMultiplayerArenaRps(arena) {
+            const challengerChoice = arena.choices[arena.challengerId];
+            const defenderChoice = arena.choices[arena.defenderId];
+            const beats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+            const names = { rock: 'Taş', paper: 'Kağıt', scissors: 'Makas' };
+            const challenger = players.find(item => item.id === arena.challengerId);
+            const defender = players.find(item => item.id === arena.defenderId);
+            const summary = `Taş-Kağıt-Makas (${challenger.name}: ${names[challengerChoice]}; ${defender.name}: ${names[defenderChoice]})`;
+            if (challengerChoice === defenderChoice) {
+                arena.round++;
+                arena.choices = {};
+                arena.stage = 'CHOOSE_ACTION';
+                arena.lastRoll = `Berabere: ${names[challengerChoice]}. Yeni tur!`;
+                broadcastMultiplayerArenaState();
+                return;
+            }
+            settleMultiplayerArena(beats[challengerChoice] === defenderChoice ? challenger.id : defender.id, summary);
+        }
+
+        function resolveMultiplayerArenaCoin(arena) {
+            const defender = players.find(item => item.id === arena.defenderId);
+            const result = arena.coinResult;
+            const guess = arena.choices[arena.defenderId];
+            const winnerId = guess === result ? arena.defenderId : arena.challengerId;
+            settleMultiplayerArena(
+                winnerId,
+                `Yazı-Tura (${defender.name} ${guess === 'heads' ? 'Yazı' : 'Tura'} seçti; para ${result === 'heads' ? 'Yazı' : 'Tura'} geldi)`
+            );
+        }
+
+        function resolveMultiplayerArenaDice(arena) {
+            const challengerRoll = arena.rolls[arena.challengerId];
+            const defenderRoll = arena.rolls[arena.defenderId];
+            if (challengerRoll.value === defenderRoll.value) {
+                arena.round++;
+                arena.rolls = {};
+                arena.nextRollerId = arena.challengerId;
+                arena.stage = 'CHOOSE_ACTION';
+                arena.lastRoll = `Berabere (${challengerRoll.value} - ${defenderRoll.value}). Zarlar yeniden atılıyor.`;
+                broadcastMultiplayerArenaState();
+                return;
+            }
+            const challenger = players.find(item => item.id === arena.challengerId);
+            const defender = players.find(item => item.id === arena.defenderId);
+            const winnerId = challengerRoll.value > defenderRoll.value ? challenger.id : defender.id;
+            const rollLabel = roll => `${roll.value}${roll.automatic ? ' (otomatik)' : ''}`;
+            settleMultiplayerArena(
+                winnerId,
+                `Zar Düellosu (${challenger.name}: ${rollLabel(challengerRoll)}; ${defender.name}: ${rollLabel(defenderRoll)})`
+            );
+        }
+
+        function resolveMultiplayerArenaCards(arena) {
+            const card = arena.revealedCard;
+            if (!card) return;
+            if (card.id === 'KILL_ATTACKER') {
+                settleMultiplayerArena(arena.defenderId, `Saldırı Kartı Düellosu (${card.name})`);
+            } else if (card.id === 'KILL_DEFENDER') {
+                settleMultiplayerArena(arena.challengerId, `Saldırı Kartı Düellosu (${card.name})`);
+            } else {
+                arena.round++;
+                arena.deck = [...ARENA_COMBAT_DECK].sort(() => Math.random() - 0.5);
+                arena.revealedCard = null;
+                arena.stage = 'CARDS_DEFENDER';
+                arena.lastRoll = `Berabere kartı çekildi (${card.name}). Yeni tur başlıyor.`;
+                broadcastMultiplayerArenaState();
+            }
+        }
+
+        function beginMultiplayerArenaDiceReveal(arena) {
+            clearMultiplayerArenaTimer();
+            arena.stage = 'DICE_REVEAL';
+            scheduleMultiplayerArenaTimer(arena, () => resolveMultiplayerArenaDice(arena), 1100);
+        }
+
+        function handleHostMultiplayerArenaAction(packet, authenticatedPeerId) {
+            const arena = multiplayerArena;
+            const rejectionPeerId = multiplayerRoster.some(item => item.peerId === authenticatedPeerId)
+                ? authenticatedPeerId
+                : packet.peerId;
+            const reject = message => {
+                if (!rejectionPeerId || !multiplayerRoster.some(item => item.peerId === rejectionPeerId)) return;
+                if (rejectionPeerId === multiplayerPeerId) {
+                    multiplayerArenaActionPending = false;
+                    setMultiplayerNotice(message, 'rose');
+                } else {
+                    broadcastMultiplayerPacket({
+                        type: 'ARENA_ACTION_REJECTED',
+                        toPeerId: rejectionPeerId,
+                        message
+                    });
+                }
+            };
+            if (!arena || packet.sessionId !== arena.sessionId || packet.peerId !== authenticatedPeerId ||
+                !multiplayerRoster.some(item => item.peerId === authenticatedPeerId)) {
+                reject('Arena hamlesi doğrulanamadı; ekranınızı yenileyin.');
+                return;
+            }
+            const actor = players.find(item => item.peerId === authenticatedPeerId && !item.eliminated);
+            const cardOwner = players.find(item => item.id === arena.challengerId);
+            if (!actor || !cardOwner || arena.ownerPeerId !== cardOwner.peerId) {
+                reject('Bu Arena hamlesini yapma yetkiniz yok.');
+                return;
+            }
+
+            if (packet.action === 'SELECT_OPPONENT') {
+                const defender = players.find(item => item.id === packet.defenderId && !item.eliminated);
+                if (arena.stage !== 'SELECT_OPPONENT' || actor.id !== arena.challengerId ||
+                    !defender || defender.id === actor.id) {
+                    reject('Bu rakip şu anda seçilemiyor.');
+                    return;
+                }
+                arena.defenderId = defender.id;
+                arena.playerIds = players.filter(item => !item.eliminated).map(item => item.id);
+                arena.bets = {};
+                arena.stage = 'BETTING';
+            } else if (packet.action === 'BET') {
+                const amount = packet.amount;
+                const resource = packet.resource;
+                const fighterId = packet.fighterId;
+                if (arena.stage !== 'BETTING' || !arena.playerIds.includes(actor.id) ||
+                    arena.bets[actor.id] || ![arena.challengerId, arena.defenderId].includes(fighterId) ||
+                    !['gold', 'wood', 'iron'].includes(resource) || !Number.isSafeInteger(amount) ||
+                    amount < 0 || amount > actor[resource]) {
+                    reject('Bahis miktarı veya seçiminiz geçersiz.');
+                    return;
+                }
+                arena.bets[actor.id] = { playerId: actor.id, fighterId, resource, amount, submitted: true };
+                if (arena.playerIds.every(id => arena.bets[id]?.submitted)) {
+                    for (const id of arena.playerIds) {
+                        const bet = arena.bets[id];
+                        const bettor = players.find(item => item.id === id);
+                        if (!bettor || bettor[bet.resource] < bet.amount) {
+                            reject('Bahisler kilitlenemedi; kaynak miktarları değişti.');
+                            return;
+                        }
+                    }
+                    arena.playerIds.forEach(id => {
+                        const bet = arena.bets[id];
+                        const bettor = players.find(item => item.id === id);
+                        bettor[bet.resource] -= bet.amount;
+                    });
+                    arena.stage = 'CHOOSE_GAME';
+                }
+            } else if (packet.action === 'CHOOSE_GAME') {
+                if (arena.stage !== 'CHOOSE_GAME' || actor.id !== arena.defenderId ||
+                    !['RPS', 'COIN', 'CARDS', 'DICE'].includes(packet.game)) {
+                    reject('Bu oyunu şu anda seçemezsiniz.');
+                    return;
+                }
+                arena.game = packet.game;
+                arena.round = 1;
+                arena.choices = {};
+                arena.rolls = {};
+                arena.nextRollerId = packet.game === 'DICE' ? arena.challengerId : null;
+                arena.coinResult = null;
+                arena.lastRoll = '';
+                arena.deck = packet.game === 'CARDS' ? [...ARENA_COMBAT_DECK].sort(() => Math.random() - 0.5) : [];
+                arena.revealedCard = null;
+                arena.stage = packet.game === 'CARDS' ? 'CARDS_DEFENDER' : 'CHOOSE_ACTION';
+                clearMultiplayerArenaTimer();
+            } else if (packet.action === 'CHOICE') {
+                if (arena.stage !== 'CHOOSE_ACTION' ||
+                    ![arena.challengerId, arena.defenderId].includes(actor.id) || arena.choices[actor.id] ||
+                    (arena.game === 'COIN' && actor.id !== arena.defenderId)) {
+                    reject('Savaşçı kararınız şu anda kabul edilemiyor.');
+                    return;
+                }
+                const allowedChoices = arena.game === 'RPS'
+                    ? ['rock', 'paper', 'scissors']
+                    : arena.game === 'COIN' ? ['heads', 'tails'] : [];
+                if (!allowedChoices.includes(String(packet.choice))) {
+                    reject('Seçtiğiniz Arena hamlesi geçersiz.');
+                    return;
+                }
+                arena.choices[actor.id] = String(packet.choice);
+                if (arena.choices[arena.challengerId] && arena.choices[arena.defenderId]) {
+                    if (arena.game === 'RPS') {
+                        arena.stage = 'RPS_ANIMATING';
+                        scheduleMultiplayerArenaTimer(arena, () => resolveMultiplayerArenaRps(arena), 1250);
+                    }
+                }
+            } else if (packet.action === 'CARDS_SHUFFLE') {
+                if (arena.stage !== 'CARDS_DEFENDER' || arena.game !== 'CARDS' || actor.id !== arena.defenderId) {
+                    reject('Desteyi yalnızca savunan savaşçı karıştırabilir.');
+                    return;
+                }
+                arena.deck.sort(() => Math.random() - 0.5);
+                arena.lastRoll = `${actor.name} desteyi karıştırıyor.`;
+            } else if (packet.action === 'CARDS_MOVE') {
+                const fromIndex = Number(packet.fromIndex);
+                const toIndex = Number(packet.toIndex);
+                if (arena.stage !== 'CARDS_DEFENDER' || arena.game !== 'CARDS' || actor.id !== arena.defenderId ||
+                    !Number.isSafeInteger(fromIndex) || !Number.isSafeInteger(toIndex) ||
+                    fromIndex < 0 || fromIndex >= arena.deck.length || toIndex < 0 || toIndex >= arena.deck.length ||
+                    fromIndex === toIndex) {
+                    reject('Kartların yeri şu anda değiştirilemiyor.');
+                    return;
+                }
+                const [movedCard] = arena.deck.splice(fromIndex, 1);
+                arena.deck.splice(toIndex, 0, movedCard);
+                arena.lastRoll = `${actor.name} kartların yerini değiştiriyor.`;
+            } else if (packet.action === 'CARDS_DRAW') {
+                if (arena.stage !== 'CARDS_DEFENDER' || arena.game !== 'CARDS' || actor.id !== arena.defenderId) {
+                    reject('Kart çektirme kararını yalnızca savunan savaşçı verebilir.');
+                    return;
+                }
+                arena.stage = 'CARDS_PICK';
+                arena.lastRoll = `${players.find(item => item.id === arena.challengerId).name} kapalı kart seçecek.`;
+            } else if (packet.action === 'CARDS_PICK') {
+                const cardIndex = Number(packet.cardIndex);
+                if (arena.stage !== 'CARDS_PICK' || arena.game !== 'CARDS' || actor.id !== arena.challengerId ||
+                    !Number.isSafeInteger(cardIndex) || cardIndex < 0 || cardIndex >= arena.deck.length) {
+                    reject('Kapalı kart seçiminiz şu anda kabul edilemiyor.');
+                    return;
+                }
+                arena.revealedCard = arena.deck[cardIndex];
+                arena.stage = 'CARDS_REVEAL';
+                scheduleMultiplayerArenaTimer(arena, () => resolveMultiplayerArenaCards(arena), 1250);
+            } else if (packet.action === 'COIN_FLIP') {
+                if (arena.stage !== 'CHOOSE_ACTION' || arena.game !== 'COIN' ||
+                    actor.id !== arena.challengerId || !arena.choices[arena.defenderId] || arena.coinResult) {
+                    reject('Parayı yalnızca rakip tahminini yaptıktan sonra atabilirsiniz.');
+                    return;
+                }
+                arena.coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
+                arena.stage = 'COIN_ANIMATING';
+                scheduleMultiplayerArenaTimer(arena, () => resolveMultiplayerArenaCoin(arena), 1250);
+            } else if (packet.action === 'DICE_ROLL') {
+                if (arena.stage !== 'CHOOSE_ACTION' || arena.game !== 'DICE' ||
+                    ![arena.challengerId, arena.defenderId].includes(actor.id) ||
+                    actor.id !== arena.nextRollerId || arena.rolls[actor.id]) {
+                    reject('Zar atışınız şu anda kabul edilemiyor.');
+                    return;
+                }
+                arena.rolls[actor.id] = {
+                    value: 1 + Math.floor(Math.random() * 6),
+                    automatic: false
+                };
+                const otherFighterId = actor.id === arena.challengerId ? arena.defenderId : arena.challengerId;
+                if (arena.rolls[otherFighterId]) {
+                    arena.nextRollerId = null;
+                    beginMultiplayerArenaDiceReveal(arena);
+                } else {
+                    arena.nextRollerId = otherFighterId;
+                    scheduleMultiplayerArenaTimer(arena, () => {
+                        if (arena.stage !== 'CHOOSE_ACTION' || arena.game !== 'DICE') return;
+                        const missingFighterId = arena.rolls[arena.challengerId]
+                            ? arena.defenderId
+                            : arena.challengerId;
+                        arena.rolls[missingFighterId] = {
+                            value: 1 + Math.floor(Math.random() * 6),
+                            automatic: true
+                        };
+                        arena.nextRollerId = null;
+                        beginMultiplayerArenaDiceReveal(arena);
+                        broadcastMultiplayerArenaState();
+                    }, 5000);
+                }
+            } else if (packet.action === 'FINISH') {
+                if (arena.stage !== 'RESULT' || actor.peerId !== arena.ownerPeerId) {
+                    reject('Arena sonucunu yalnızca kartı çeken oyuncu onaylayabilir.');
+                    return;
+                }
+                const outcomeText = arena.result.outcomeText;
+                clearMultiplayerArenaTimer();
+                const cardOwner = players.find(item => item.id === arena.challengerId);
+                multiplayerArena = null;
+                multiplayerArenaActionPending = false;
+                const finishCallback = multiplayerArenaFinishCallback;
+                multiplayerArenaFinishCallback = null;
+                if (activeChanceContext && activeChanceContext.player?.id === arena.challengerId &&
+                    cardOwner && activeChanceContext.currentCardIndex === arena.cardIndex) {
+                    completeChanceCardInteractive(cardOwner, arena.cardIndex, outcomeText);
+                } else if (finishCallback) finishCallback(outcomeText);
+                broadcastMultiplayerArenaState();
+                return;
+            } else {
+                reject('Bilinmeyen Arena hamlesi.');
+                return;
+            }
+
+            multiplayerArenaActionPending = false;
+            broadcastMultiplayerArenaState();
+        }
+
+        function renderMultiplayerArena() {
+            const stage = document.getElementById('chance-interactive-stage');
+            const arena = multiplayerArena;
+            if (!stage || !arena) return;
+            const localPlayer = players.find(item => item.peerId === multiplayerPeerId);
+            const challenger = players.find(item => item.id === arena.challengerId);
+            const defender = players.find(item => item.id === arena.defenderId);
+            const isOwner = arena.ownerPeerId === multiplayerPeerId;
+            const canAct = canLocalPlayerActInArena() && !multiplayerArenaActionPending;
+            const esc = value => String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[char]);
+            const actionButton = (action, label, details = {}, classes = 'gold-btn') =>
+                `<button data-arena-action="${action}" ${Object.entries(details).map(([key, value]) => `data-${key.replace(/[A-Z]/g, char => `-${char.toLowerCase()}`)}="${esc(value)}"`).join(' ')} class="${classes} text-white font-bold py-2 px-3 rounded-lg text-xs disabled:opacity-40" ${canAct ? '' : 'disabled'}>${label}</button>`;
+            const setButtonHandlers = () => {
+                stage.querySelectorAll('[data-arena-action]').forEach(button => {
+                    button.addEventListener('click', () => {
+                        playSFX('click');
+                        const action = button.dataset.arenaAction;
+                        const details = {};
+                        if (action === 'BET') {
+                            details.fighterId = Number(stage.querySelector('[name="arena-fighter"]').value);
+                            details.resource = stage.querySelector('[name="arena-resource"]').value;
+                            details.amount = Number(stage.querySelector('[name="arena-amount"]').value);
+                            if (!Number.isSafeInteger(details.amount) || details.amount < 0 ||
+                                details.amount > localPlayer[details.resource]) {
+                                setMultiplayerNotice('Bahis miktarı seçili kaynağınızdan fazla veya geçersiz.', 'rose');
+                                return;
+                            }
+                        } else if (action === 'SELECT_OPPONENT') {
+                            details.defenderId = Number(button.dataset.defenderId);
+                        } else if (action === 'CHOOSE_GAME') {
+                            details.game = button.dataset.game;
+                        } else if (action === 'CHOICE') {
+                            details.choice = button.dataset.choice;
+                        } else if (action === 'CARDS_PICK') {
+                            details.cardIndex = Number(button.dataset.cardIndex);
+                        }
+                        submitMultiplayerArenaAction(action, details);
+                    });
+                });
+            };
+            const fighterNames = `<b>${esc(challenger?.name)}</b> ve <b>${esc(defender?.name)}</b>`;
+            const publicCardSelections = arena.game === 'CARDS'
+                ? Object.entries(arena.choices).map(([playerId, choice]) => {
+                    const chooser = players.find(item => item.id === Number(playerId));
+                    return `<div class="text-[11px] text-amber-300">${esc(chooser?.name)} kapalı kart çekti.</div>`;
+                }).join('')
+                : '';
+            const betRows = arena.playerIds.map(id => {
+                const bettor = players.find(item => item.id === id);
+                const bet = arena.bets[id];
+                return `<div class="text-[11px]">${esc(bettor?.name)}: ${bet?.submitted ? `bahis kilitlendi (${esc(players.find(item => item.id === bet.fighterId)?.name)}, ${bet.amount} ${esc(bet.resource)})` : 'bahis bekleniyor'}</div>`;
+            }).join('');
+
+            if (arena.stage === 'SELECT_OPPONENT') {
+                const rivals = players.filter(item => !item.eliminated && item.id !== arena.challengerId);
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 space-y-3">
+                    <div class="text-sm font-bold text-amber-300">🏟️ ${esc(challenger?.name)} rakibini seçiyor</div>
+                    ${isOwner ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => actionButton('SELECT_OPPONENT', `${esc(rival.name)} seç`, { defenderId: rival.id }, 'bg-slate-800 hover:bg-slate-700 border border-amber-400/40')).join('')}</div>` : '<div class="text-xs text-slate-300">Rakip seçimi bekleniyor...</div>'}
+                </div>`;
+            } else if (arena.stage === 'BETTING') {
+                const resources = ['gold', 'wood', 'iron'];
+                const defaultResource = resources.find(resource => (localPlayer?.[resource] || 0) > 0) || 'gold';
+                const draft = multiplayerArenaLocalDraft || (multiplayerArenaLocalDraft = {
+                    fighterId: arena.challengerId,
+                    resource: defaultResource,
+                    amount: (localPlayer?.[defaultResource] || 0) > 0 ? 1 : 0
+                });
+                const submitted = !!arena.bets[localPlayer?.id]?.submitted;
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 space-y-2">
+                    <div class="text-sm font-bold text-emerald-300">💰 Her krallık kendi ekranından bahis koysun</div>
+                    <div class="text-xs text-slate-200">Savaşçılar: ${fighterNames}</div>
+                    <div class="bg-slate-950/70 rounded-lg p-2 space-y-1">${betRows}</div>
+                    ${localPlayer && !localPlayer.eliminated ? submitted ? '<div class="text-xs text-emerald-300">Bahsiniz kilitlendi. Diğer oyuncular bekleniyor.</div>' : `
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <select name="arena-fighter" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
+                                <option value="${arena.challengerId}" ${draft.fighterId === arena.challengerId ? 'selected' : ''}>${esc(challenger?.name)} kazanır</option>
+                                <option value="${arena.defenderId}" ${draft.fighterId === arena.defenderId ? 'selected' : ''}>${esc(defender?.name)} kazanır</option>
+                            </select>
+                            <select name="arena-resource" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
+                                ${resources.map(resource => `<option value="${resource}" ${draft.resource === resource ? 'selected' : ''}>${resource === 'gold' ? 'Altın' : resource === 'wood' ? 'Odun' : 'Demir'} (${localPlayer[resource]})</option>`).join('')}
+                            </select>
+                            <input name="arena-amount" type="number" min="0" step="1" max="${localPlayer[draft.resource]}" value="${draft.amount}" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
+                        </div>
+                        ${actionButton('BET', 'Bahsi gönder', {}, 'bg-emerald-700 hover:bg-emerald-600')}
+                    ` : ''}
+                    <div class="text-[10px] text-slate-400">${arena.playerIds.length} oyuncunun tamamı bahis gönderince kaynaklar kilitlenir.</div>
+                </div>`;
+                const fighterSelect = stage.querySelector('[name="arena-fighter"]');
+                const resourceSelect = stage.querySelector('[name="arena-resource"]');
+                const amountInput = stage.querySelector('[name="arena-amount"]');
+                if (fighterSelect) fighterSelect.onchange = () => { draft.fighterId = Number(fighterSelect.value); };
+                if (resourceSelect) resourceSelect.onchange = () => {
+                    draft.resource = resourceSelect.value;
+                    amountInput.max = String(localPlayer[resourceSelect.value]);
+                    if (Number(amountInput.value) > localPlayer[resourceSelect.value]) {
+                        amountInput.value = String(localPlayer[resourceSelect.value]);
+                        draft.amount = Number(amountInput.value);
+                    }
+                };
+                if (amountInput) amountInput.oninput = () => { draft.amount = Number(amountInput.value); };
+            } else if (arena.stage === 'CHOOSE_GAME') {
+                const games = [
+                    ['RPS', '✊ Taş-Kağıt-Makas'], ['COIN', '🪙 Yazı-Tura'],
+                    ['CARDS', '🃏 Saldırı Kartı Düellosu'], ['DICE', '🎲 Zar Düellosu']
+                ];
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 space-y-3">
+                    <div class="text-sm font-bold text-sky-300">${esc(defender?.name)} oyunu seçiyor</div>
+                    <div class="text-xs text-slate-200">Bahisler tamamlandı. Savaşçılar: ${fighterNames}</div>
+                    <div class="grid grid-cols-2 gap-2">${games.map(([game, label]) => actionButton('CHOOSE_GAME', label, { game }, 'bg-slate-800 hover:bg-slate-700 border border-sky-400/40')).join('')}</div>
+                </div>`;
+            } else if (arena.stage === 'CARDS_DEFENDER') {
+                const cardIcons = { KILL_ATTACKER: '💀', KILL_DEFENDER: '⚔️', DRAW_1: '⚖️' };
+                const mayArrangeCards = localPlayer?.id === arena.defenderId;
+                const deckMarkup = arena.deck.map((card, index) => mayArrangeCards
+                    ? `<div draggable="${canAct}" data-arena-card-index="${index}" class="w-24 min-h-24 rounded-lg border-2 border-amber-400 bg-slate-950/90 p-2 flex flex-col items-center justify-center text-center cursor-grab ${arena.lastRoll.includes('yerini değiştiriyor') ? 'combat-card-shuffling' : ''}">
+                        <span class="text-2xl">${cardIcons[card.id] || '⚔️'}</span><b class="text-[10px] text-amber-300">${esc(card.name.replace(/^[^ ]+ /, ''))}</b>
+                    </div>`
+                    : `<div aria-label="Kapalı savaş kartı" class="w-12 h-16 rounded-lg border-2 border-purple-400 bg-gradient-to-br from-purple-700 to-slate-950 flex items-center justify-center text-xl combat-card-shuffling">🂠</div>`
+                ).join('');
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-purple-300">🃏 Arena Saldırı Kartı • Tur ${arena.round}</div>
+                    <div class="text-xs text-slate-200">${esc(defender?.name)} desteyi yönetiyor; ${esc(challenger?.name)} kartı çekecek.</div>
+                    <div class="flex justify-center gap-2 ${arena.lastRoll.includes('karıştırıyor') ? 'combat-card-shuffling' : ''}">${deckMarkup}</div>
+                    ${arena.lastRoll ? `<div class="text-xs text-amber-300">${esc(arena.lastRoll)}</div>` : ''}
+                    ${localPlayer?.id === arena.defenderId
+                        ? `<div class="flex justify-center gap-2">${actionButton('CARDS_SHUFFLE', '🔀 Karıştır', {}, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')}${actionButton('CARDS_DRAW', '🂠 Kart çektir', {}, 'bg-purple-700 hover:bg-purple-600')}</div>`
+                        : '<div class="text-xs text-slate-300">Savunan oyuncunun kararı bekleniyor...</div>'}
+                </div>`;
+                if (mayArrangeCards) {
+                    let draggedIndex = null;
+                    stage.querySelectorAll('[data-arena-card-index]').forEach(cardElement => {
+                        cardElement.addEventListener('dragstart', event => {
+                            draggedIndex = Number(cardElement.dataset.arenaCardIndex);
+                            event.dataTransfer.effectAllowed = 'move';
+                        });
+                        cardElement.addEventListener('dragover', event => event.preventDefault());
+                        cardElement.addEventListener('drop', event => {
+                            event.preventDefault();
+                            const targetIndex = Number(cardElement.dataset.arenaCardIndex);
+                            if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                                submitMultiplayerArenaAction('CARDS_MOVE', {
+                                    fromIndex: draggedIndex,
+                                    toIndex: targetIndex
+                                });
+                            }
+                            draggedIndex = null;
+                        });
+                    });
+                }
+            } else if (arena.stage === 'CARDS_PICK') {
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-purple-300">🂠 ${esc(challenger?.name)} kapalı kart seçiyor • Tur ${arena.round}</div>
+                    <div class="grid grid-cols-3 gap-2">${arena.deck.map((_, index) =>
+                        actionButton('CARDS_PICK', `🂠 Kart ${index + 1}`, { cardIndex: index }, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')
+                    ).join('')}</div>
+                    ${localPlayer?.id === arena.challengerId ? '' : '<div class="text-xs text-slate-300">Kart seçimi bekleniyor...</div>'}
+                </div>`;
+            } else if (arena.stage === 'CARDS_REVEAL') {
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-purple-300">🃏 Arena Saldırı Kartı Açılıyor</div>
+                    <div class="chance-flip-in mx-auto max-w-xs rounded-xl border-2 border-amber-400 bg-slate-950/90 p-3">
+                        <div class="text-2xl">⚔️</div>
+                        <div class="text-sm font-bold text-amber-300">${esc(arena.revealedCard?.name)}</div>
+                        <div class="text-xs text-slate-200">${esc(arena.revealedCard?.desc)}</div>
+                    </div>
+                </div>`;
+            } else if (arena.stage === 'CHOOSE_ACTION') {
+                let selectionControls = '';
+                if (arena.game === 'DICE') {
+                    const rollRows = [arena.challengerId, arena.defenderId].map(id => {
+                        const fighter = players.find(item => item.id === id);
+                        const roll = arena.rolls[id];
+                        return `<div class="bg-slate-950/70 rounded-lg p-2 text-sm">${esc(fighter?.name)}: ${roll ? `🎲 ${roll.value}${roll.automatic ? ' <span class="text-amber-300">(otomatik)</span>' : ''}` : 'zar atmadı'}</div>`;
+                    }).join('');
+                    const alreadyRolled = !!arena.rolls[localPlayer?.id];
+                    const isFighter = [arena.challengerId, arena.defenderId].includes(localPlayer?.id);
+                    const nextRoller = players.find(item => item.id === arena.nextRollerId);
+                    const rollControl = localPlayer?.id === arena.nextRollerId
+                        ? actionButton('DICE_ROLL', `🎲 ${esc(localPlayer?.name)} zarını at`, {}, 'bg-sky-700 hover:bg-sky-600')
+                        : alreadyRolled
+                            ? '<div class="text-xs text-emerald-300">Zarınız atıldı; rakip zarını bekliyor.</div>'
+                            : isFighter
+                                ? `<div class="text-xs text-slate-300">${esc(nextRoller?.name)} zarını atacak.</div>`
+                                : '<div class="text-xs text-slate-300">Savaşçıların zarları bekleniyor...</div>';
+                    selectionControls = `<div class="grid grid-cols-2 gap-2">${rollRows}</div>${rollControl}`;
+                } else if (localPlayer && [arena.challengerId, arena.defenderId].includes(localPlayer.id)) {
+                    const hasChosen = !!arena.choices[localPlayer.id];
+                    if (arena.game === 'COIN') {
+                        if (localPlayer.id === arena.defenderId) {
+                            selectionControls = hasChosen
+                                ? `<div class="text-xs text-emerald-300">Tahmininiz: ${arena.choices[localPlayer.id] === 'heads' ? 'Yazı' : 'Tura'}. Saldıranın parayı atması bekleniyor.</div>`
+                                : `<div class="text-xs font-bold text-emerald-300">Savunan yazı ya da tura seçer:</div><div class="grid grid-cols-2 gap-2">${[['heads', '🪙 Yazı'], ['tails', '👑 Tura']].map(([choice, label]) => actionButton('CHOICE', label, { choice }, 'bg-slate-800 hover:bg-emerald-900/60 border border-emerald-400/40')).join('')}</div>`;
+                        } else {
+                            selectionControls = arena.coinResult
+                                ? '<div class="text-xs text-emerald-300">Para atıldı; sonuç belirleniyor...</div>'
+                                : actionButton('COIN_FLIP', '🪙 Parayı at', {}, 'bg-emerald-700 hover:bg-emerald-600');
+                        }
+                    } else if (hasChosen) selectionControls = '<div class="text-xs text-emerald-300">Kararınız gizlice gönderildi; rakibiniz bekleniyor.</div>';
+                    else if (arena.game === 'RPS') {
+                        selectionControls = `<div class="grid grid-cols-3 gap-2">${[['rock', '✊ Taş'], ['paper', '✋ Kağıt'], ['scissors', '✌️ Makas']].map(([choice, label]) => actionButton('CHOICE', label, { choice }, 'bg-slate-800 hover:bg-amber-900/60 border border-amber-400/40')).join('')}</div>`;
+                    } else {
+                        const opponentId = localPlayer.id === arena.challengerId ? arena.defenderId : arena.challengerId;
+                        const opponentChoice = arena.choices[opponentId];
+                        selectionControls = `<div class="grid grid-cols-3 gap-2">${arena.deck.map((card, index) =>
+                            String(index) === opponentChoice
+                                ? '<div class="bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-[10px] text-slate-500">Çekildi</div>'
+                                : actionButton('CHOICE', `🂠 Kapalı kart ${index + 1}`, { choice: index }, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')
+                        ).join('')}</div>`;
+                    }
+                } else {
+                    selectionControls = '<div class="text-xs text-slate-300">Savaşçıların kararları bekleniyor...</div>';
+                }
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3">
+                    <div class="text-sm font-bold text-purple-300">⚔️ ${arena.game === 'RPS' ? 'Taş-Kağıt-Makas' : arena.game === 'COIN' ? 'Yazı-Tura' : arena.game === 'CARDS' ? 'Saldırı Kartı Düellosu' : 'Zar Düellosu'} • Tur ${arena.round}</div>
+                    <div class="text-xs text-slate-200">Kararlar her savaşçının kendi cihazından gizlice verilir. ${fighterNames}</div>
+                    ${arena.lastRoll ? `<div class="text-xs text-amber-300">${esc(arena.lastRoll)}</div>` : ''}
+                    ${publicCardSelections}
+                    ${selectionControls}
+                </div>`;
+            } else if (arena.stage === 'RPS_ANIMATING') {
+                const faces = { rock: '✊', paper: '✋', scissors: '✌️' };
+                const names = { rock: 'Taş', paper: 'Kağıt', scissors: 'Makas' };
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-amber-300">✊ Taş-Kağıt-Makas Düellosu • Tur ${arena.round}</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="arena-rps-left rounded-xl border border-amber-500/40 bg-slate-950/70 p-3"><div class="text-xs">${esc(challenger?.name)}</div><div class="text-5xl">${faces[arena.choices[arena.challengerId]]}</div><div class="text-xs text-amber-300">${names[arena.choices[arena.challengerId]]}</div></div>
+                        <div class="arena-rps-right rounded-xl border border-sky-500/40 bg-slate-950/70 p-3"><div class="text-xs">${esc(defender?.name)}</div><div class="text-5xl">${faces[arena.choices[arena.defenderId]]}</div><div class="text-xs text-sky-300">${names[arena.choices[arena.defenderId]]}</div></div>
+                    </div>
+                    <div class="text-xs text-slate-300">Düello sürüyor...</div>
+                </div>`;
+            } else if (arena.stage === 'COIN_ANIMATING') {
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-emerald-300">🪙 Yazı-Tura</div>
+                    <div class="arena-coin-flipping text-6xl py-3">${arena.coinResult === 'heads' ? '🪙' : '👑'}</div>
+                    <div class="text-xs text-slate-300">Sikke havada dönüyor...</div>
+                </div>`;
+            } else if (arena.stage === 'DICE_REVEAL') {
+                const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 space-y-3 text-center">
+                    <div class="text-sm font-bold text-sky-300">🎲 Zar Düellosu • Tur ${arena.round}</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        ${[arena.challengerId, arena.defenderId].map((id, index) => {
+                            const fighter = players.find(item => item.id === id);
+                            const roll = arena.rolls[id];
+                            return `<div class="bg-slate-950/70 rounded-xl p-3"><div class="text-xs">${esc(fighter?.name)}</div><div class="arena-die-rolling text-5xl py-2">${faces[roll.value - 1]} ${roll.value}</div><div class="text-[10px] text-amber-300">${roll.automatic ? 'Otomatik atış' : 'Oyuncu attı'}</div></div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            } else if (arena.stage === 'RESULT') {
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border-2 border-amber-400 rounded-xl p-3 space-y-2 text-center">
+                    <div class="text-sm font-extrabold text-amber-300">🏆 ARENA ŞAMPİYONU: ${esc(players.find(item => item.id === arena.result.winnerId)?.name)}!</div>
+                    <div class="text-xs text-slate-200">${esc(arena.result.summary)}</div>
+                    <div class="text-[11px] text-amber-300">Ganimet: ${esc(arena.result.seizedText)} • Kazanan bahisçiler: ${esc(arena.result.bettorRewards)}</div>
+                    ${isOwner ? actionButton('FINISH', 'Arena sonuçlarını onayla') : '<div class="text-xs text-slate-400">Kartı çeken oyuncu sonucu onaylayacak.</div>'}
+                </div>`;
+            }
+            setButtonHandlers();
+        }
+
         // "39. Arenaya" kartı için Çok Aşamalı Bahis ve 4 Farklı Arena Oyunu (Taş-Kağıt-Makas, Yazı-Tura, Savaş Kartı Seçme, Zar Atma) Motoru
         function renderArenaInteractive(player, armyIndex, finishCallback) {
+            if (multiplayerSession) {
+                if (!multiplayerArena) {
+                    multiplayerArena = {
+                        sessionId: `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        ownerPeerId: multiplayerPeerId,
+                        challengerId: player.id,
+                        cardIndex: activeChanceContext?.currentCardIndex,
+                        defenderId: null,
+                        playerIds: [],
+                        stage: 'SELECT_OPPONENT',
+                        bets: {},
+                        game: null,
+                        round: 1,
+                        choices: {},
+                        rolls: {},
+                        nextRollerId: null,
+                        coinResult: null,
+                        deck: [],
+                        result: null
+                    };
+                    multiplayerArenaFinishCallback = finishCallback;
+                    multiplayerArenaLocalDraft = null;
+                }
+                renderMultiplayerArena();
+                return;
+            }
             const stage = document.getElementById('chance-interactive-stage');
             const rivals = players.filter(p => !p.eliminated && p.id !== player.id);
             if (rivals.length === 0) {
@@ -6617,7 +7752,7 @@
                             </button>
                             <button id="arena-game-cards" class="bg-slate-800 hover:bg-slate-700 border border-purple-500/40 hover:border-purple-400 rounded-xl p-2.5 text-left transition">
                                 <div class="text-sm font-bold text-purple-300">🃏 3. Saldırı Kartı Seçme</div>
-                                <div class="text-[10px] text-slate-300 mt-0.5">6 kapalı savaş kartından en güçlüsünü çeken kazanır!</div>
+                                <div class="text-[10px] text-slate-300 mt-0.5">Savunan karıştırır; saldıran 3 sonuç kartından birini çeker.</div>
                             </button>
                             <button id="arena-game-dice" class="bg-slate-800 hover:bg-slate-700 border border-sky-500/40 hover:border-sky-400 rounded-xl p-2.5 text-left transition">
                                 <div class="text-sm font-bold text-sky-300">🎲 4. Zar Atma Düellosu</div>
@@ -6676,23 +7811,30 @@
                 }
 
                 function resolveRPSRound(m1, m2) {
-                    if (m1.id === m2.id) {
-                        playSFX('reset');
-                        stage.innerHTML = `
-                            <div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 text-center space-y-2.5">
-                                <div class="text-xs font-bold text-amber-300">🤝 BERABERE! (${m1.icon} ${m1.name} vs ${m2.icon} ${m2.name})</div>
-                                <div class="text-[11px] text-slate-300">İki savaşçı da aynı hamleyi yaptı! Hemen tekrar seçiliyor...</div>
-                                <button id="btn-rps-rematch" class="gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs">🔄 Tekrar Seç (Tur ${round + 1})</button>
+                    stage.innerHTML = `
+                        <div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 text-center space-y-3">
+                            <div class="text-xs font-bold text-amber-300">✊✋✌️ TAŞ - KAĞIT - MAKAS • Tur ${round}</div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="arena-rps-left rounded-xl border border-amber-500/40 bg-slate-950/70 p-3"><div class="text-xs">${player.name}</div><div class="text-5xl">${m1.icon}</div><div class="text-xs text-amber-300">${m1.name}</div></div>
+                                <div class="arena-rps-right rounded-xl border border-sky-500/40 bg-slate-950/70 p-3"><div class="text-xs">${defender.name}</div><div class="text-5xl">${m2.icon}</div><div class="text-xs text-sky-300">${m2.name}</div></div>
                             </div>
-                        `;
-                        document.getElementById('btn-rps-rematch').onclick = () => playArenaRPS(round + 1);
-                        return;
-                    }
-                    const p1Wins = m1.beats === m2.id;
-                    const winner = p1Wins ? player : defender;
-                    const loser = p1Wins ? defender : player;
-                    const detailText = `Taş-Kağıt-Makas (${player.name}: ${m1.icon} ${m1.name} vs ${defender.name}: ${m2.icon} ${m2.name})`;
-                    resolveArenaPayout(winner, loser, detailText);
+                            <div class="text-xs text-slate-300">Düello sürüyor...</div>
+                        </div>`;
+                    setTimeout(() => {
+                        if (m1.id === m2.id) {
+                            playSFX('reset');
+                            stage.innerHTML = `<div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 text-center space-y-2.5">
+                                <div class="text-xs font-bold text-amber-300">🤝 BERABERE! (${m1.icon} ${m1.name} vs ${m2.icon} ${m2.name})</div>
+                                <div class="text-[11px] text-slate-300">Yeni tur başlıyor...</div></div>`;
+                            setTimeout(() => playArenaRPS(round + 1), 900);
+                            return;
+                        }
+                        const p1Wins = m1.beats === m2.id;
+                        const winner = p1Wins ? player : defender;
+                        const loser = p1Wins ? defender : player;
+                        const detailText = `Taş-Kağıt-Makas (${player.name}: ${m1.icon} ${m1.name} vs ${defender.name}: ${m2.icon} ${m2.name})`;
+                        resolveArenaPayout(winner, loser, detailText);
+                    }, 1100);
                 }
 
                 askMove(player, false);
@@ -6700,108 +7842,127 @@
 
             // OYUN 2: YAZI - TURA
             function playArenaCoinFlip() {
-                stage.innerHTML = `
-                    <div class="bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 text-center space-y-3">
+                let defenderPick = null;
+                const renderCoinChoice = () => {
+                    stage.innerHTML = `<div class="bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 text-center space-y-3">
                         <div class="text-xs font-bold text-emerald-300">🪙 YAZI - TURA DÜELLOSU</div>
-                        <div class="text-xs text-slate-200">
-                            <b style="color:${player.color}">${player.name}</b> tarafını seçiyor (Diğer taraf otomatik olarak <b style="color:${defender.color}">${defender.name}</b> olacak):
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <button id="btn-coin-yazi" class="bg-amber-700 hover:bg-amber-600 border-2 border-amber-300 rounded-xl p-3 text-white font-bold text-sm shadow-lg">
-                                🪙 YAZI (${player.name})<br><span class="text-[10px] font-normal text-amber-200">Tura: ${defender.name}</span>
-                            </button>
-                            <button id="btn-coin-tura" class="bg-sky-700 hover:bg-sky-600 border-2 border-sky-300 rounded-xl p-3 text-white font-bold text-sm shadow-lg">
-                                👑 TURA (${player.name})<br><span class="text-[10px] font-normal text-sky-200">Yazı: ${defender.name}</span>
-                            </button>
-                        </div>
-                    </div>
-                `;
-
-                const flipCoin = (p1Pick) => {
-                    playSFX('dice_tick');
-                    const result = Math.random() < 0.5 ? 'YAZI' : 'TURA';
-                    const p1Wins = p1Pick === result;
-                    const winner = p1Wins ? player : defender;
-                    const loser = p1Wins ? defender : player;
-                    resolveArenaPayout(winner, loser, `Yazı-Tura (Havaya atılan para: ${result})`);
+                        ${defenderPick
+                            ? `<div class="text-xs text-slate-200"><b style="color:${defender.color}">${defender.name}</b> ${defenderPick === 'HEADS' ? 'Yazı' : 'Tura'} seçti. <b style="color:${player.color}">${player.name}</b> parayı atar.</div>
+                                <button id="btn-coin-flip" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs">🪙 Parayı havaya at</button>`
+                            : `<div class="text-xs text-slate-200"><b style="color:${defender.color}">${defender.name}</b> Yazı veya Tura seçer:</div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <button data-coin-pick="HEADS" class="bg-amber-700 hover:bg-amber-600 border-2 border-amber-300 rounded-xl p-3 text-white font-bold text-sm">🪙 YAZI</button>
+                                    <button data-coin-pick="TAILS" class="bg-sky-700 hover:bg-sky-600 border-2 border-sky-300 rounded-xl p-3 text-white font-bold text-sm">👑 TURA</button>
+                                </div>`}
+                    </div>`;
+                    stage.querySelectorAll('[data-coin-pick]').forEach(button => {
+                        button.onclick = () => {
+                            playSFX('click');
+                            defenderPick = button.dataset.coinPick;
+                            renderCoinChoice();
+                        };
+                    });
+                    const flipButton = document.getElementById('btn-coin-flip');
+                    if (flipButton) flipButton.onclick = () => {
+                        flipButton.disabled = true;
+                        const result = Math.random() < 0.5 ? 'HEADS' : 'TAILS';
+                        playSFX('dice_tick');
+                        stage.innerHTML = `<div class="bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 text-center space-y-3">
+                            <div class="text-xs font-bold text-emerald-300">🪙 YAZI - TURA DÜELLOSU</div>
+                            <div class="arena-coin-flipping text-6xl py-3">${result === 'HEADS' ? '🪙' : '👑'}</div>
+                            <div class="text-xs text-slate-300">Sikke havada dönüyor...</div></div>`;
+                        setTimeout(() => {
+                            const p1Wins = defenderPick === result;
+                            resolveArenaPayout(p1Wins ? defender : player, p1Wins ? player : defender,
+                                `Yazı-Tura (${defender.name} ${defenderPick === 'HEADS' ? 'Yazı' : 'Tura'} seçti; para ${result === 'HEADS' ? 'Yazı' : 'Tura'} geldi)`);
+                        }, 1200);
+                    };
                 };
-
-                document.getElementById('btn-coin-yazi').onclick = () => flipCoin('YAZI');
-                document.getElementById('btn-coin-tura').onclick = () => flipCoin('TURA');
+                renderCoinChoice();
             }
 
             // OYUN 3: SALDIRI SİSTEMİNDEKİ SAVAŞ KARTI SEÇME
             function playArenaCombatCards(round = 1) {
-                const powerRank = {
-                    'KILL_DEFENDER': 6,
-                    'RAVAGE': 5,
-                    'OPPORTUNITY': 4,
-                    'DRAW_1': 3,
-                    'DRAW_2': 3,
-                    'REPEL_ATTACKER': 2,
-                    'KILL_ATTACKER': 1
-                };
-                const deck = [...BASE_COMBAT_DECK].sort(() => Math.random() - 0.5);
-                let p1CardIdx = null;
+                const deck = [...ARENA_COMBAT_DECK].sort(() => Math.random() - 0.5);
+                const cardIcons = { KILL_ATTACKER: '💀', KILL_DEFENDER: '⚔️', DRAW_1: '⚖️' };
+                let stageName = 'DEFENDER';
+                let shuffleAnimation = false;
 
                 function renderArenaCardBoard() {
-                    const currentChooser = p1CardIdx === null ? player : defender;
                     stage.innerHTML = `
                         <div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-2.5">
                             <div class="text-xs font-bold text-purple-300">🃏 ARENA SAVAŞ KARTI SEÇME (Tur ${round})</div>
-                            <div class="text-xs text-white">
-                                Sıra: <span class="font-extrabold" style="color:${currentChooser.color}">${currentChooser.name}</span> kapalı savaş kartlarından birini çekiyor!
-                            </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                ${deck.map((c, idx) => {
-                                    if (idx === p1CardIdx) {
-                                        return `
-                                            <div class="bg-amber-950/90 border-2 border-amber-400 rounded-xl p-2 text-center flex flex-col justify-between min-h-[82px]">
-                                                <div class="text-[10px] font-bold text-amber-300">${c.name}</div>
-                                                <div class="text-[9px] text-emerald-300 font-bold">${player.name} Çekti</div>
-                                            </div>
-                                        `;
-                                    }
-                                    return `
-                                        <button data-cidx="${idx}" class="btn-arena-card card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-2 flex flex-col items-center justify-center min-h-[82px] cursor-pointer shadow">
-                                            <span class="text-xl">⚔️</span>
-                                            <span class="text-[10px] font-bold text-amber-200 mt-0.5">KART #${idx + 1}</span>
-                                        </button>
-                                    `;
-                                }).join('')}
-                            </div>
+                            ${stageName === 'DEFENDER'
+                                ? `<div class="text-xs text-white"><b style="color:${defender.color}">${defender.name}</b> desteyi karıştırır veya saldırana kart çektirir.</div>
+                                    <div class="flex flex-wrap justify-center gap-2 ${shuffleAnimation ? 'combat-card-shuffling' : ''}">${deck.map((card, index) => `<div draggable="true" data-arena-arrange-index="${index}" class="w-24 min-h-24 rounded-lg border-2 border-amber-400 bg-slate-950/90 p-2 flex flex-col items-center justify-center text-center cursor-grab"><span class="text-2xl">${cardIcons[card.id]}</span><b class="text-[10px] text-amber-300">${card.name.replace(/^[^ ]+ /, '')}</b></div>`).join('')}</div>
+                                    <div class="flex justify-center gap-2">
+                                        <button id="btn-arena-card-shuffle" class="bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40 text-white font-bold py-2 px-3 rounded-lg text-xs">🔀 Karıştır</button>
+                                        <button id="btn-arena-card-draw" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-2 px-3 rounded-lg text-xs">🂠 Kart çektir</button>
+                                    </div>`
+                                : `<div class="text-xs text-white"><b style="color:${player.color}">${player.name}</b> kapalı kartlardan birini seçiyor.</div>
+                                    <div class="grid grid-cols-3 gap-2">${deck.map((_, idx) => `<button data-cidx="${idx}" class="btn-arena-card card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-2 flex flex-col items-center justify-center min-h-[82px] cursor-pointer shadow"><span class="text-xl">🂠</span><span class="text-[10px] font-bold text-amber-200 mt-0.5">KART #${idx + 1}</span></button>`).join('')}</div>`
+                            }
                         </div>
                     `;
 
+                    const shuffleButton = document.getElementById('btn-arena-card-shuffle');
+                    if (shuffleButton) shuffleButton.onclick = () => {
+                        playSFX('card_flip');
+                        deck.sort(() => Math.random() - 0.5);
+                        shuffleAnimation = true;
+                        renderArenaCardBoard();
+                        setTimeout(() => {
+                            shuffleAnimation = false;
+                            if (stageName === 'DEFENDER') renderArenaCardBoard();
+                        }, 600);
+                    };
+                    const drawButton = document.getElementById('btn-arena-card-draw');
+                    if (drawButton) drawButton.onclick = () => {
+                        playSFX('card_flip');
+                        stageName = 'ATTACKER_PICK';
+                        shuffleAnimation = false;
+                        renderArenaCardBoard();
+                    };
+                    let draggedIndex = null;
+                    stage.querySelectorAll('[data-arena-arrange-index]').forEach(cardElement => {
+                        cardElement.addEventListener('dragstart', event => {
+                            draggedIndex = Number(cardElement.dataset.arenaArrangeIndex);
+                            event.dataTransfer.effectAllowed = 'move';
+                        });
+                        cardElement.addEventListener('dragover', event => event.preventDefault());
+                        cardElement.addEventListener('drop', event => {
+                            event.preventDefault();
+                            const targetIndex = Number(cardElement.dataset.arenaArrangeIndex);
+                            if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                                const [movedCard] = deck.splice(draggedIndex, 1);
+                                deck.splice(targetIndex, 0, movedCard);
+                                renderArenaCardBoard();
+                            }
+                            draggedIndex = null;
+                        });
+                    });
                     stage.querySelectorAll('.btn-arena-card').forEach(btn => {
                         btn.onclick = () => {
                             playSFX('card_flip');
                             const idx = parseInt(btn.getAttribute('data-cidx'));
-                            if (p1CardIdx === null) {
-                                p1CardIdx = idx;
-                                renderArenaCardBoard();
-                            } else {
-                                const c1 = deck[p1CardIdx];
-                                const c2 = deck[idx];
-                                const r1 = powerRank[c1.id] || 0;
-                                const r2 = powerRank[c2.id] || 0;
-                                if (r1 === r2) {
+                            const card = deck[idx];
+                            stage.innerHTML = `<div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-3">
+                                <div class="text-xs font-bold text-purple-300">🃏 Arena Saldırı Kartı Açılıyor</div>
+                                <div class="chance-flip-in mx-auto max-w-xs rounded-xl border-2 border-amber-400 bg-slate-950/90 p-3"><div class="text-2xl">⚔️</div><div class="text-sm font-bold text-amber-300">${card.name}</div><div class="text-xs text-slate-200">${card.desc}</div></div>
+                            </div>`;
+                            setTimeout(() => {
+                                if (card.id === 'DRAW_1') {
                                     playSFX('reset');
-                                    stage.innerHTML = `
-                                        <div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-2">
-                                            <div class="text-xs font-bold text-amber-300">⚔️ KART GÜÇLERİ EŞİT! (${c1.name} vs ${c2.name})</div>
-                                            <div class="text-[11px] text-slate-300">İki savaşçı da aynı güçte savaş kartı çekti! Kartlar yeniden karılıyor...</div>
-                                            <button id="btn-cards-rematch" class="gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs">🔄 Kartları Karıştır ve Tekrar Çek</button>
-                                        </div>
-                                    `;
-                                    document.getElementById('btn-cards-rematch').onclick = () => playArenaCombatCards(round + 1);
+                                    stage.innerHTML = `<div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-2">
+                                        <div class="text-xs font-bold text-amber-300">⚖️ BERABERE</div>
+                                        <div class="text-[11px] text-slate-300">Yeni tur için deste yeniden karılıyor...</div></div>`;
+                                    setTimeout(() => playArenaCombatCards(round + 1), 900);
                                     return;
                                 }
-                                const p1Wins = r1 > r2;
-                                const winner = p1Wins ? player : defender;
-                                const loser = p1Wins ? defender : player;
-                                resolveArenaPayout(winner, loser, `Saldırı Kartı Düellosu (${player.name}: ${c1.name} vs ${defender.name}: ${c2.name})`);
-                            }
+                                const attackerDies = card.id === 'KILL_ATTACKER';
+                                resolveArenaPayout(attackerDies ? defender : player, attackerDies ? player : defender,
+                                    `Saldırı Kartı Düellosu (${card.name})`);
+                            }, 1250);
                         };
                     });
                 }
@@ -6812,58 +7973,56 @@
             // OYUN 4: ZAR ATMA DÜELLOSU
             function playArenaDiceDuel(round = 1) {
                 const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-                stage.innerHTML = `
-                    <div class="bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 text-center space-y-3">
+                const rolls = {};
+                const fighters = [player, defender];
+                const renderDiceDuel = () => {
+                    const nextFighter = fighters.find(fighter => !rolls[fighter.id]);
+                    stage.innerHTML = `<div class="bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 text-center space-y-3">
                         <div class="text-xs font-bold text-sky-300">🎲 ARENA ZAR DÜELLOSU (Tur ${round})</div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-slate-800/90 border border-amber-500/40 rounded-xl p-2.5">
-                                <div class="text-[11px] font-bold text-amber-300">${player.name}</div>
-                                <div id="arena-d1" class="text-3xl font-extrabold text-white my-1">🎲</div>
-                            </div>
-                            <div class="bg-slate-800/90 border border-sky-500/40 rounded-xl p-2.5">
-                                <div class="text-[11px] font-bold text-sky-300">${defender.name}</div>
-                                <div id="arena-d2" class="text-3xl font-extrabold text-white my-1">🎲</div>
-                            </div>
-                        </div>
-                        <button id="btn-roll-arena-dice" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
-                            🎲 Arena Zarlarını At!
-                        </button>
-                    </div>
-                `;
-
-                document.getElementById('btn-roll-arena-dice').onclick = () => {
-                    const btn = document.getElementById('btn-roll-arena-dice');
-                    btn.disabled = true;
-                    const d1El = document.getElementById('arena-d1');
-                    const d2El = document.getElementById('arena-d2');
-                    let ticks = 0;
-                    const iv = setInterval(() => {
-                        const t1 = Math.floor(Math.random() * 6);
-                        const t2 = Math.floor(Math.random() * 6);
-                        d1El.textContent = `${faces[t1]} ${t1 + 1}`;
-                        d2El.textContent = `${faces[t2]} ${t2 + 1}`;
-                        playSFX('dice_tick');
-                        ticks++;
-                        if (ticks >= 10) {
-                            clearInterval(iv);
-                            const r1 = Math.floor(Math.random() * 6) + 1;
-                            const r2 = Math.floor(Math.random() * 6) + 1;
-                            d1El.textContent = `${faces[r1 - 1]} ${r1}`;
-                            d2El.textContent = `${faces[r2 - 1]} ${r2}`;
-                            playSFX('dice_done');
-                            setTimeout(() => {
-                                if (r1 === r2) {
-                                    playArenaDiceDuel(round + 1);
-                                } else {
-                                    const p1Wins = r1 > r2;
-                                    const winner = p1Wins ? player : defender;
-                                    const loser = p1Wins ? defender : player;
-                                    resolveArenaPayout(winner, loser, `Zar Düellosu (${player.name}: ${r1} vs ${defender.name}: ${r2})`);
-                                }
-                            }, 550);
-                        }
-                    }, 70);
+                        <div class="grid grid-cols-2 gap-3">${fighters.map((fighter, index) => {
+                            const value = rolls[fighter.id];
+                            return `<div class="bg-slate-800/90 border ${index ? 'border-sky-500/40' : 'border-amber-500/40'} rounded-xl p-2.5">
+                                <div class="text-[11px] font-bold ${index ? 'text-sky-300' : 'text-amber-300'}">${fighter.name}</div>
+                                <div id="arena-d${index + 1}" class="text-3xl font-extrabold text-white my-1">${value ? `${faces[value - 1]} ${value}` : '🎲'}</div>
+                            </div>`;
+                        }).join('')}</div>
+                        ${nextFighter ? `<div class="text-xs text-slate-200">Sıra <b style="color:${nextFighter.color}">${nextFighter.name}</b> krallığında</div>
+                            <button id="btn-roll-arena-dice" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">🎲 ${nextFighter.name} zarını at</button>`
+                            : '<div class="text-xs text-slate-300">Zarlar karşılaştırılıyor...</div>'}
+                    </div>`;
+                    const rollButton = document.getElementById('btn-roll-arena-dice');
+                    if (!rollButton) return;
+                    rollButton.onclick = () => {
+                        rollButton.disabled = true;
+                        const fighter = fighters.find(item => !rolls[item.id]);
+                        const die = document.getElementById(`arena-d${fighters.indexOf(fighter) + 1}`);
+                        let ticks = 0;
+                        const interval = setInterval(() => {
+                            const face = Math.floor(Math.random() * 6);
+                            die.textContent = `${faces[face]} ${face + 1}`;
+                            playSFX('dice_tick');
+                            if (++ticks >= 10) {
+                                clearInterval(interval);
+                                rolls[fighter.id] = Math.floor(Math.random() * 6) + 1;
+                                playSFX('dice_done');
+                                if (fighters.every(item => rolls[item.id])) {
+                                    renderDiceDuel();
+                                    setTimeout(() => {
+                                        const challengerRoll = rolls[player.id];
+                                        const defenderRoll = rolls[defender.id];
+                                        if (challengerRoll === defenderRoll) playArenaDiceDuel(round + 1);
+                                        else resolveArenaPayout(
+                                            challengerRoll > defenderRoll ? player : defender,
+                                            challengerRoll > defenderRoll ? defender : player,
+                                            `Zar Düellosu (${player.name}: ${challengerRoll} vs ${defender.name}: ${defenderRoll})`
+                                        );
+                                    }, 650);
+                                } else renderDiceDuel();
+                            }
+                        }, 70);
+                    };
                 };
+                renderDiceDuel();
             }
 
             // AŞAMA 5: ARENA SONUCU VE ÖDÜL DAĞITIMI
@@ -7445,6 +8604,20 @@
             selectAndExecuteChanceCard(rndIdx);
         }
 
+        function completeChanceCardInteractive(player, cardIndex, outcomeText) {
+            const card = CHANCE_CARDS_DB[cardIndex];
+            if (!player || !card) return false;
+            document.getElementById('chance-keep-btn').classList.add('hidden');
+            const outcomeEl = document.getElementById('chance-card-outcome');
+            outcomeEl.textContent = outcomeText;
+            outcomeEl.classList.remove('hidden');
+            document.getElementById('chance-continue-btn').classList.remove('hidden');
+            addLog(`❓ <b>Şans Kartı (${player.name}):</b> <span class="text-purple-300 font-bold">[${card.title}]</span> — <i>${outcomeText}</i>`);
+            updateUI();
+            drawMap();
+            return true;
+        }
+
         function selectAndExecuteChanceCard(cardIndex, fromInventory = false) {
             const card = CHANCE_CARDS_DB[cardIndex];
             if (!card || !activeChanceContext) return;
@@ -7476,6 +8649,10 @@
 
             document.getElementById('chance-card-title').textContent = card.title;
             document.getElementById('chance-card-desc').textContent = card.desc;
+            const roleDisplay = document.getElementById('chance-role-display');
+            const roleLabel = getChanceCardRoleLabel(card);
+            roleDisplay.textContent = roleLabel ? `🎭 ${roleLabel}` : '';
+            roleDisplay.classList.toggle('hidden', !roleLabel);
 
             const outcomeEl = document.getElementById('chance-card-outcome');
             outcomeEl.classList.add('hidden');
@@ -7494,13 +8671,7 @@
             contBtn.classList.add('hidden');
 
             const finishCallback = (outcomeText) => {
-                keepBtn.classList.add('hidden');
-                outcomeEl.textContent = outcomeText;
-                outcomeEl.classList.remove('hidden');
-                contBtn.classList.remove('hidden');
-                addLog(`❓ <b>Şans Kartı (${player.name}):</b> <span class="text-purple-300 font-bold">[${card.title}]</span> — <i>${outcomeText}</i>`);
-                updateUI();
-                drawMap();
+                completeChanceCardInteractive(player, cardIndex, outcomeText);
                 if (multiplayerSession && player.peerId === multiplayerPeerId) {
                     scheduleMultiplayerSync();
                 }
@@ -7520,7 +8691,17 @@
 
         function closeChanceModal() {
             document.getElementById('chance-modal').classList.add('hidden');
+            document.getElementById('chance-role-display').classList.add('hidden');
+            if (localHodriDuelCleanup) {
+                localHodriDuelCleanup();
+                localHodriDuelCleanup = null;
+            }
             activeChanceContext = null;
+            if (multiplayerHodriDuel) {
+                clearMultiplayerHodriDuelTimer();
+                multiplayerHodriDuel = null;
+                multiplayerHodriDuelActionPending = false;
+            }
 
             // Eğer kuyrukta başka şans hücresi varsa ve gizli patika moduna geçilmediyse sıradakini aç
             if (pendingChanceQueue.length > 0 && gameState === 'PHASE_4_ACTION') {
@@ -7540,6 +8721,9 @@
         function openTradeModal() {
             const p = getActivePlayer();
             if (!p) return;
+            localTradeOfferPending = null;
+            localTradeOfferEditing = false;
+            multiplayerTradeOfferEditing = false;
             const select = document.getElementById('trade-target-player');
             select.innerHTML = '';
             players.forEach(other => {
@@ -7564,6 +8748,8 @@
             select.disabled = false;
             document.getElementById('trade-submit-button').textContent = '🤝 Antlaşmayı İmzala & Takas Et';
             document.getElementById('trade-submit-button').disabled = false;
+            document.getElementById('trade-edit-button').classList.add('hidden');
+            document.getElementById('trade-approve-button').classList.add('hidden');
 
             const caravanBadge = document.getElementById('trade-caravan-status');
             if (caravanBadge) {
@@ -7585,6 +8771,61 @@
                 document.getElementById(id).value = 0;
             });
             document.getElementById('trade-request-pact').checked = false;
+        }
+
+        function setTradeOfferFieldsDisabled(disabled) {
+            document.querySelectorAll('#trade-offer-content input').forEach(control => {
+                control.disabled = disabled;
+            });
+        }
+
+        function updateLocalTradeControls() {
+            if (multiplayerSession) return;
+            const pending = !!localTradeOfferPending;
+            const editButton = document.getElementById('trade-edit-button');
+            const approveButton = document.getElementById('trade-approve-button');
+            const submitButton = document.getElementById('trade-submit-button');
+            editButton.classList.toggle('hidden', !pending || localTradeOfferEditing);
+            approveButton.classList.toggle('hidden', !pending || localTradeOfferEditing);
+            submitButton.disabled = pending && !localTradeOfferEditing;
+            submitButton.textContent = !pending
+                ? '📨 Teklifi Sun'
+                : localTradeOfferEditing ? '✏️ Teklifi Güncelle' : '✅ Teklif Sunuldu';
+            setTradeOfferFieldsDisabled(pending && !localTradeOfferEditing);
+            document.getElementById('trade-target-player').disabled = pending && !localTradeOfferEditing;
+            if (pending) {
+                const player = getActivePlayer();
+                const target = players.find(item => item.id === localTradeOfferPending.targetId);
+                const summarize = (owner, resources, cards, buildings) => {
+                    if (!owner) return '—';
+                    const parts = [];
+                    if (resources.gold) parts.push(`🪙${resources.gold} Altın`);
+                    if (resources.wood) parts.push(`🪵${resources.wood} Odun`);
+                    if (resources.iron) parts.push(`⛏️${resources.iron} Demir`);
+                    cards.forEach(index => {
+                        if (owner.heldCards[index]) parts.push(`🎒${owner.heldCards[index].title.replace(/^\\d+\\.\\s*/, '')}`);
+                    });
+                    buildings.forEach(key => {
+                        const building = grid.get(key);
+                        if (building) parts.push(`🏗️${building.poi} (${building.q},${building.r})`);
+                    });
+                    return parts.join(', ') || 'Varlık yok';
+                };
+                const giveSummary = summarize(
+                    player,
+                    { gold: localTradeOfferPending.gG, wood: localTradeOfferPending.gW, iron: localTradeOfferPending.gI },
+                    localTradeOfferPending.giveCards,
+                    localTradeOfferPending.giveBuildings
+                );
+                const takeSummary = summarize(
+                    target,
+                    { gold: localTradeOfferPending.tG, wood: localTradeOfferPending.tW, iron: localTradeOfferPending.tI },
+                    localTradeOfferPending.takeCards,
+                    localTradeOfferPending.takeBuildings
+                );
+                document.getElementById('trade-own-offer-preview').textContent =
+                    `📤 ${player?.name || 'Sen'}: ${giveSummary} ⇄ 📥 ${target?.name || 'Karşı taraf'}: ${takeSummary}${localTradeOfferPending.pact ? ' • 🕊️ Saldırmazlık paktı' : ''}`;
+            }
         }
 
         function getTradeLocalPlayer() {
@@ -7689,6 +8930,8 @@
                     '🕊️ Bu ticaretle 1 turluk saldırmazlık paktı imzalamayı kabul ediyorum. Pakt yalnızca iki taraf da seçerse kurulur.';
                 renderRemoteTradeOffer(target);
                 updateTradeNegotiationStatus();
+            } else {
+                updateLocalTradeControls();
             }
         }
 
@@ -7737,33 +8980,92 @@
             const status = document.getElementById('trade-status');
             status.classList.remove('hidden');
             const ownOfferSent = !!multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
+            const ownApproved = !!multiplayerTradeNegotiation.approvals?.[multiplayerPeerId];
             const ownOfferPending = multiplayerTradeOfferPendingSessionId === multiplayerTradeNegotiation.sessionId;
             const otherPeerId = multiplayerTradeNegotiation.peerA === multiplayerPeerId
                 ? multiplayerTradeNegotiation.peerB
                 : multiplayerTradeNegotiation.peerA;
             const otherOfferSent = !!multiplayerTradeNegotiation.offers?.[otherPeerId];
-            status.textContent = ownOfferSent
-                ? (otherOfferSent ? 'İki teklif de gönderildi; takas onaylanıyor…' : 'Teklifin gönderildi. Karşı tarafın teklifi bekleniyor…')
+            const bothOffersSent = ownOfferSent && otherOfferSent;
+            status.textContent = ownApproved
+                ? (multiplayerTradeNegotiation.approvals?.[otherPeerId]
+                    ? 'İki taraf da onayladı; takas tamamlanıyor…'
+                    : 'Teklifini onayladın. Karşı tarafın onayı bekleniyor…')
+                : ownOfferSent
+                    ? (bothOffersSent ? 'İki teklif hazır. Teklifi onaylayabilir veya değiştirebilirsin.' : 'Teklifin sunuldu; karşı tarafın teklifini bekliyorsun.')
                 : ownOfferPending
                     ? 'Teklif host’a iletiliyor; onay bekleniyor…'
-                    : (otherOfferSent ? 'Karşı taraf teklifini gönderdi. Teklifini göndererek takası tamamla.' : 'İki taraf da teklifini ayrı ayrı göndermeli.');
+                    : (otherOfferSent ? 'Karşı taraf teklifini sundu. Sen de teklif sunabilir veya karşı teklifi inceleyebilirsin.' : 'Önce teklifini sun; ardından iki taraf da onaylayacak.');
             const ownOffer = multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
             const ownPlayer = getTradeLocalPlayer();
             document.getElementById('trade-own-offer-preview').textContent = ownOffer
                 ? `Gönderdiğin teklif: ${summarizeTradeOffer(ownPlayer, ownOffer).join(' • ') || 'Varlık yok'}${ownOffer.pact ? ' • 🕊️ Pakt isteği' : ''}`
                 : ownOfferPending ? 'Teklifin host onayı bekliyor.' : 'Henüz teklif gönderilmedi.';
-            document.querySelectorAll('#give-gold, #give-wood, #give-iron, .trade-give-card-cb, .trade-give-bldg-cb, #trade-request-pact')
-                .forEach(control => { control.disabled = ownOfferSent || ownOfferPending; });
-            document.getElementById('trade-submit-button').disabled = ownOfferSent || ownOfferPending;
-            document.getElementById('trade-submit-button').textContent = ownOfferSent
-                ? '✅ Teklif Gönderildi'
-                : ownOfferPending ? '⏳ İletiliyor…' : '📨 Teklifi Gönder';
+            const canEdit = multiplayerTradeOfferEditing && !ownApproved && !ownOfferPending;
+            document.querySelectorAll('#trade-offer-content input').forEach(control => {
+                control.disabled = ownApproved || ownOfferPending || (ownOfferSent && !canEdit);
+            });
+            document.getElementById('trade-submit-button').disabled =
+                ownApproved || ownOfferPending || (ownOfferSent && !canEdit);
+            document.getElementById('trade-submit-button').textContent = ownOfferPending
+                ? '⏳ İletiliyor…'
+                : ownOfferSent ? (canEdit ? '✏️ Teklifi Güncelle' : '✅ Teklif Sunuldu') : '📨 Teklifi Sun';
+            document.getElementById('trade-edit-button').classList.toggle(
+                'hidden', !ownOfferSent || ownApproved || canEdit || ownOfferPending
+            );
+            document.getElementById('trade-approve-button').classList.toggle(
+                'hidden', !bothOffersSent || ownApproved || canEdit || ownOfferPending
+            );
+            document.getElementById('trade-approve-button').disabled = !bothOffersSent || ownApproved || ownOfferPending;
+            if (ownApproved) document.getElementById('trade-edit-button').classList.add('hidden');
         }
 
         function clearPendingMultiplayerTradeOffer() {
             if (multiplayerTradeOfferPendingTimer) clearTimeout(multiplayerTradeOfferPendingTimer);
             multiplayerTradeOfferPendingTimer = null;
             multiplayerTradeOfferPendingSessionId = null;
+        }
+
+        function clearPendingTradeInvite() {
+            if (pendingTradeInviteTimer) clearTimeout(pendingTradeInviteTimer);
+            pendingTradeInviteTimer = null;
+            pendingTradeInviteId = null;
+        }
+
+        function editTradeOffer() {
+            if (multiplayerSession) {
+                const session = multiplayerTradeNegotiation;
+                if (!session || !session.offers?.[multiplayerPeerId] ||
+                    session.approvals?.[multiplayerPeerId]) return;
+                multiplayerTradeOfferEditing = true;
+                const sent = sendMultiplayerTradePacket({
+                    type: 'TRADE_EDIT',
+                    sessionId: session.sessionId
+                });
+                if (!sent) setMultiplayerNotice('Teklif değişikliği host’a gönderilemedi. Bağlantıyı kontrol edin.', 'rose');
+                updateTradeNegotiationStatus();
+                return;
+            }
+            if (!localTradeOfferPending) return;
+            localTradeOfferEditing = true;
+            updateLocalTradeControls();
+        }
+
+        function approveTradeOffer() {
+            if (multiplayerSession) {
+                const session = multiplayerTradeNegotiation;
+                const otherPeerId = session?.peerA === multiplayerPeerId ? session.peerB : session?.peerA;
+                if (!session || !session.offers?.[multiplayerPeerId] || !session.offers?.[otherPeerId] ||
+                    session.approvals?.[multiplayerPeerId]) return;
+                const sent = sendMultiplayerTradePacket({
+                    type: 'TRADE_APPROVE',
+                    sessionId: session.sessionId
+                });
+                if (!sent) setMultiplayerNotice('Onay host’a gönderilemedi. Oda bağlantısını yenileyip tekrar deneyin.', 'rose');
+                return;
+            }
+            if (!localTradeOfferPending || localTradeOfferEditing) return;
+            commitLocalTrade(localTradeOfferPending);
         }
 
         function respondToTradeInvite(accepted) {
@@ -7776,10 +9078,15 @@
             document.getElementById('trade-incoming-controls').classList.add('hidden');
             document.getElementById('trade-status').textContent = 'Davet kabul edildi; teklif masası açılıyor…';
             document.getElementById('trade-status').classList.remove('hidden');
-            sendMultiplayerTradePacket({
+            const sent = sendMultiplayerTradePacket({
                 type: 'TRADE_ACCEPT',
                 sessionId: session.sessionId
             });
+            if (!sent) {
+                document.getElementById('trade-incoming-controls').classList.remove('hidden');
+                document.getElementById('trade-status').textContent = 'Kabul yanıtı host’a gönderilemedi. Bağlantıyı kontrol edin.';
+                setMultiplayerNotice('Ticaret daveti kabul edilemedi; host bağlantısı kapalı.', 'rose');
+            }
         }
 
         function renderTradeSessionStage(rebuildAssets) {
@@ -7826,12 +9133,28 @@
             document.getElementById('trade-status').textContent = `${target.name} oyuncusuna davet gönderiliyor…`;
             document.getElementById('trade-status').classList.remove('hidden');
             document.getElementById('trade-invite-controls').classList.add('hidden');
-            pendingTradeInviteId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            sendMultiplayerTradePacket({
+            clearPendingTradeInvite();
+            const inviteId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            pendingTradeInviteId = inviteId;
+            const sent = sendMultiplayerTradePacket({
                 type: 'TRADE_INVITE',
-                sessionId: pendingTradeInviteId,
+                sessionId: inviteId,
                 toPeerId: target.peerId
             });
+            if (!sent) {
+                clearPendingTradeInvite();
+                document.getElementById('trade-invite-controls').classList.remove('hidden');
+                document.getElementById('trade-status').textContent = 'Host bağlantısı kapalı; ticaret daveti gönderilemedi.';
+                setMultiplayerNotice('Ticaret daveti gönderilemedi. Oyuncu bağlantısı kurulmasını bekleyin.', 'rose');
+                return;
+            }
+            pendingTradeInviteTimer = setTimeout(() => {
+                if (pendingTradeInviteId !== inviteId) return;
+                clearPendingTradeInvite();
+                document.getElementById('trade-invite-controls').classList.remove('hidden');
+                document.getElementById('trade-status').textContent = 'Davet onayı gelmedi; host bağlantısını kontrol edip tekrar deneyin.';
+                setMultiplayerNotice('Ticaret davetine host yanıt vermedi. Bağlantıyı kontrol edin.', 'rose');
+            }, 8000);
         }
 
         function collectTradeOffer() {
@@ -7873,12 +9196,19 @@
                 multiplayerTradeNegotiation = null;
             }
             clearPendingMultiplayerTradeOffer();
+            clearPendingTradeInvite();
+            localTradeOfferPending = null;
+            localTradeOfferEditing = false;
+            multiplayerTradeOfferEditing = false;
             document.getElementById('trade-modal').classList.add('hidden');
         }
 
         function executeTrade() {
             if (multiplayerSession) {
                 if (!multiplayerTradeNegotiation) return;
+                const existingOffer = multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
+                if (existingOffer && !multiplayerTradeOfferEditing) return;
+                if (multiplayerTradeNegotiation.approvals?.[multiplayerPeerId]) return;
                 const player = getTradeLocalPlayer();
                 const offer = collectTradeOffer();
                 if (!player || !validateTradeOffer(player, offer)) {
@@ -7909,6 +9239,7 @@
                     setMultiplayerNotice('Teklif gönderilemedi; oda bağlantısını kontrol edip tekrar deneyin.', 'rose');
                     return;
                 }
+                multiplayerTradeOfferEditing = false;
                 return;
             }
             executeLocalTrade();
@@ -7920,18 +9251,59 @@
             const target = players.find(x => x.id === targetId);
             if (!p || !target) return;
 
-            const gG = Math.max(0, parseInt(document.getElementById('give-gold').value) || 0);
-            const gW = Math.max(0, parseInt(document.getElementById('give-wood').value) || 0);
-            const gI = Math.max(0, parseInt(document.getElementById('give-iron').value) || 0);
+            if (localTradeOfferPending && !localTradeOfferEditing) return;
+            const offer = {
+                targetId,
+                gG: Math.max(0, parseInt(document.getElementById('give-gold').value) || 0),
+                gW: Math.max(0, parseInt(document.getElementById('give-wood').value) || 0),
+                gI: Math.max(0, parseInt(document.getElementById('give-iron').value) || 0),
+                tG: Math.max(0, parseInt(document.getElementById('take-gold').value) || 0),
+                tW: Math.max(0, parseInt(document.getElementById('take-wood').value) || 0),
+                tI: Math.max(0, parseInt(document.getElementById('take-iron').value) || 0),
+                giveCards: Array.from(document.querySelectorAll('.trade-give-card-cb:checked'))
+                    .map(cb => parseInt(cb.value)).sort((a, b) => b - a),
+                takeCards: Array.from(document.querySelectorAll('.trade-take-card-cb:checked'))
+                    .map(cb => parseInt(cb.value)).sort((a, b) => b - a),
+                giveBuildings: Array.from(document.querySelectorAll('.trade-give-bldg-cb:checked')).map(cb => cb.value),
+                takeBuildings: Array.from(document.querySelectorAll('.trade-take-bldg-cb:checked')).map(cb => cb.value),
+                pact: document.getElementById('trade-request-pact').checked
+            };
+            const givenCount = offer.gG + offer.gW + offer.gI + offer.giveCards.length + offer.giveBuildings.length;
+            const takenCount = offer.tG + offer.tW + offer.tI + offer.takeCards.length + offer.takeBuildings.length;
+            if (givenCount === 0 && takenCount === 0) {
+                playSFX('error');
+                addLog(`⚠️ Ticaret başarısız: En az bir kaynak, şans kartı veya bina tapusu seçmelisiniz.`);
+                return;
+            }
+            if (p.gold < offer.gG || p.wood < offer.gW || p.iron < offer.gI ||
+                target.gold < offer.tG || target.wood < offer.tW || target.iron < offer.tI ||
+                offer.giveCards.some(index => !p.heldCards[index]) ||
+                offer.takeCards.some(index => !target.heldCards[index]) ||
+                offer.giveBuildings.some(key => grid.get(key)?.buildingOwner !== p.id) ||
+                offer.takeBuildings.some(key => grid.get(key)?.buildingOwner !== target.id)) {
+                playSFX('error');
+                addLog(`⚠️ Ticaret başarısız: Teklifteki kaynak veya varlıklar artık mevcut değil.`);
+                return;
+            }
+            localTradeOfferPending = offer;
+            localTradeOfferEditing = false;
+            document.getElementById('trade-status').textContent =
+                `${target.name} için teklif sunuldu. Teklifi onaylayın veya değiştirin.`;
+            document.getElementById('trade-status').classList.remove('hidden');
+            updateLocalTradeControls();
+        }
 
-            const tG = Math.max(0, parseInt(document.getElementById('take-gold').value) || 0);
-            const tW = Math.max(0, parseInt(document.getElementById('take-wood').value) || 0);
-            const tI = Math.max(0, parseInt(document.getElementById('take-iron').value) || 0);
+        function commitLocalTrade(offer) {
+            const p = getActivePlayer();
+            const target = players.find(x => x.id === offer.targetId);
+            if (!p || !target) return;
 
-            const giveCardIndices = Array.from(document.querySelectorAll('.trade-give-card-cb:checked')).map(cb => parseInt(cb.value)).sort((a, b) => b - a);
-            const takeCardIndices = Array.from(document.querySelectorAll('.trade-take-card-cb:checked')).map(cb => parseInt(cb.value)).sort((a, b) => b - a);
-            const giveBldgKeys = Array.from(document.querySelectorAll('.trade-give-bldg-cb:checked')).map(cb => cb.value);
-            const takeBldgKeys = Array.from(document.querySelectorAll('.trade-take-bldg-cb:checked')).map(cb => cb.value);
+            const { gG, gW, gI, tG, tW, tI } = offer;
+
+            const giveCardIndices = offer.giveCards;
+            const takeCardIndices = offer.takeCards;
+            const giveBldgKeys = offer.giveBuildings;
+            const takeBldgKeys = offer.takeBuildings;
 
             const givenCount = gG + gW + gI + giveCardIndices.length + giveBldgKeys.length;
             const takenCount = tG + tW + tI + takeCardIndices.length + takeBldgKeys.length;
@@ -8040,7 +9412,7 @@
             if (takenCardNames.length > 0) takeSummary.push(`🎒${takenCardNames.length} Kart`);
             if (takenBldgNames.length > 0) takeSummary.push(`🏗️${takenBldgNames.join(', ')}`);
 
-            const pactSigned = document.getElementById('trade-request-pact').checked;
+            const pactSigned = offer.pact;
             if (pactSigned) establishTradeNonAggressionPact(p.id, target.id);
             addLog(`🤝 <b>Diplomatik Ticaret:</b> <b>${p.name}</b> [${giveSummary.join(', ') || '—'}] ⇄ <b>${target.name}</b> [${takeSummary.join(', ') || '—'}].${pactSigned ? ' <b>🕊️ 1 turluk saldırmazlık paktı imzalandı.</b>' : ''}`);
             if (caravanBonusAwarded) {
@@ -8115,20 +9487,23 @@
         function updateUI() {
             const p = getActivePlayer();
             if (!p) return;
+            const hudPlayer = multiplayerSession
+                ? players.find(player => player.peerId === multiplayerPeerId) || p
+                : p;
 
-            document.getElementById('hud-player-dot').style.backgroundColor = p.color;
-            document.getElementById('hud-player-name').textContent = p.name;
+            document.getElementById('hud-player-dot').style.backgroundColor = hudPlayer.color;
+            document.getElementById('hud-player-name').textContent = hudPlayer.name;
             document.getElementById('hud-turn-badge').textContent = gameState.startsWith('SETUP') ? 'KURULUM' : `TUR ${turnNumber}`;
             updateClockDisplay();
 
-            const inc = calculatePlayerIncome(p);
-            document.getElementById('res-gold').textContent = p.gold;
+            const inc = calculatePlayerIncome(hudPlayer);
+            document.getElementById('res-gold').textContent = hudPlayer.gold;
             document.getElementById('inc-gold').textContent = `(+${inc.gold})`;
-            document.getElementById('res-wood').textContent = p.wood;
+            document.getElementById('res-wood').textContent = hudPlayer.wood;
             document.getElementById('inc-wood').textContent = `(+${inc.wood})`;
-            document.getElementById('res-iron').textContent = p.iron;
+            document.getElementById('res-iron').textContent = hudPlayer.iron;
             document.getElementById('inc-iron').textContent = `(+${inc.iron})`;
-            document.getElementById('res-armies').textContent = `${p.armies.length}/3`;
+            document.getElementById('res-armies').textContent = `${hudPlayer.armies.length}/3`;
 
             const s1 = document.getElementById('phase-step-1');
             const s2 = document.getElementById('phase-step-2');
@@ -8216,6 +9591,18 @@
             const subEl = document.getElementById('action-subtitle');
             const btnsEl = document.getElementById('action-buttons');
             btnsEl.innerHTML = '';
+
+            if (multiplayerSession && multiplayerHodriDuel) {
+                const canRoll = canLocalPlayerRollInHodriDuel() && !multiplayerHodriDuelActionPending;
+                titleEl.textContent = '🎲 Hodri Meydanı düellosu sürüyor';
+                subEl.textContent = canRoll
+                    ? 'Şans kartı penceresinden kendi zarını at.'
+                    : multiplayerHodriDuel.stage === 'RESULT'
+                        ? 'Düello tamamlandı; kartı çeken oyuncu devam edebilir.'
+                        : 'Harita hamleleri düello bitene kadar duraklatıldı.';
+                btnsEl.innerHTML = '<span class="px-3 py-1.5 rounded-lg text-xs font-bold border bg-amber-950/90 text-amber-200 border-amber-500/60">🎲 DÜELLO DEVAM EDİYOR</span>';
+                return;
+            }
 
             if (multiplayerSession && !multiplayerCanAct()) {
                 const waitingForCommit = multiplayerAwaitingCommit &&
@@ -9947,6 +11334,13 @@
 
         function isMultiplayerUiTarget(target) {
             if (!(target instanceof Element)) return false;
+            if (target.closest('.arena-multiplayer-controls')) return true;
+            if (multiplayerHodriDuel?.stage === 'RESULT' &&
+                activeChanceContext?.player?.peerId === multiplayerPeerId &&
+                target.closest('#chance-continue-btn')) return true;
+            if (multiplayerSession && target.closest('#chance-interactive-stage') &&
+                activeChanceContext?.currentCardIndex === CHANCE_CARDS_DB.findIndex(card =>
+                    card.id === 'pos_31_high_roll_duel_2g')) return true;
             if (target.closest('#trade-modal')) {
                 return !!multiplayerTradeNegotiation &&
                     (multiplayerTradeNegotiation.peerA === multiplayerPeerId ||
@@ -10042,6 +11436,10 @@
             document.getElementById('chance-card-badge').textContent = `${card.icon} ${card.category}`;
             document.getElementById('chance-card-title').textContent = card.title;
             document.getElementById('chance-card-desc').textContent = card.desc;
+            const roleLabel = getChanceCardRoleLabel(card);
+            const roleDisplay = document.getElementById('chance-role-display');
+            roleDisplay.textContent = roleLabel ? `🎭 ${roleLabel}` : '';
+            roleDisplay.classList.toggle('hidden', !roleLabel);
             document.getElementById('chance-card-outcome').classList.add('hidden');
             document.getElementById('chance-card-outcome').textContent = '';
             document.getElementById('chance-keep-btn').classList.add('hidden');
@@ -10106,11 +11504,57 @@
             }
         }
 
+        function canLocalPlayerActInArena() {
+            if (!multiplayerArena) return false;
+            if (multiplayerArena.stage === 'SELECT_OPPONENT' || multiplayerArena.stage === 'RESULT') {
+                return multiplayerArena.ownerPeerId === multiplayerPeerId;
+            }
+            if (multiplayerArena.stage === 'BETTING') {
+                const player = players.find(item => item.peerId === multiplayerPeerId);
+                return !!player && !player.eliminated && !multiplayerArena.bets[player.id]?.submitted;
+            }
+            if (multiplayerArena.stage === 'CHOOSE_GAME') {
+                const defender = players.find(item => item.id === multiplayerArena.defenderId);
+                return defender?.peerId === multiplayerPeerId;
+            }
+            if (multiplayerArena.stage === 'CARDS_DEFENDER') {
+                const defender = players.find(item => item.id === multiplayerArena.defenderId);
+                return defender?.peerId === multiplayerPeerId;
+            }
+            if (multiplayerArena.stage === 'CARDS_PICK') {
+                const challenger = players.find(item => item.id === multiplayerArena.challengerId);
+                return challenger?.peerId === multiplayerPeerId;
+            }
+            if (multiplayerArena.stage === 'CHOOSE_ACTION') {
+                const fighterIds = [multiplayerArena.challengerId, multiplayerArena.defenderId];
+                const player = players.find(item => item.peerId === multiplayerPeerId);
+                if (!player || !fighterIds.includes(player.id)) return false;
+                if (multiplayerArena.game === 'DICE') {
+                    return player.id === multiplayerArena.nextRollerId && !multiplayerArena.rolls[player.id];
+                }
+                if (multiplayerArena.game === 'COIN') {
+                    if (player.id === multiplayerArena.defenderId) return !multiplayerArena.choices[player.id];
+                    return !!multiplayerArena.choices[multiplayerArena.defenderId] && !multiplayerArena.coinResult;
+                }
+                return !multiplayerArena.choices[player.id];
+            }
+            return false;
+        }
+
         function multiplayerCanAct() {
             if (!multiplayerSession) return true;
             if (gameState === 'PREVIEW') return multiplayerIsHost;
-            const activePlayer = players[activePlayerIndex];
-            return !!activePlayer && activePlayer.peerId === multiplayerPeerId && !multiplayerAwaitingCommit;
+            if (multiplayerHodriDuel) {
+                if (multiplayerHodriDuel.stage === 'RESULT') {
+                    return activeChanceContext?.player?.peerId === multiplayerPeerId && !multiplayerAwaitingCommit;
+                }
+                return canLocalPlayerRollInHodriDuel() && !multiplayerAwaitingCommit;
+            }
+            if (multiplayerArena) return canLocalPlayerActInArena() && !multiplayerAwaitingCommit;
+            const actingPlayer = currentCombat
+                ? getCombatControllerPlayer()
+                : players[activePlayerIndex];
+            return !!actingPlayer && actingPlayer.peerId === multiplayerPeerId && !multiplayerAwaitingCommit;
         }
 
         function captureMultiplayerSnapshot() {
@@ -10148,6 +11592,8 @@
                     armyIndex: activeChanceContext.armyIndex,
                     currentCardIndex: activeChanceContext.currentCardIndex
                 } : null,
+                multiplayerArena,
+                multiplayerHodriDuel,
                 currentCombat: currentCombat ? {
                     attackerId: currentCombat.attacker.id,
                     defenderId: currentCombat.defender.id,
@@ -10159,7 +11605,9 @@
                     drawnCard: currentCombat.drawnCard,
                     drawTwoPickOne: currentCombat.drawTwoPickOne,
                     drawnIndices: currentCombat.drawnIndices,
-                    pickedIdx: currentCombat.pickedIdx
+                    pickedIdx: currentCombat.pickedIdx,
+                    lifesaverResolved: currentCombat.lifesaverResolved,
+                    manuallyShuffled: currentCombat.manuallyShuffled
                 } : null,
                 setupModalClass: document.getElementById('setup-modal').className,
                 gameLog: document.getElementById('game-log').innerHTML,
@@ -10227,6 +11675,17 @@
                     }
                     : null;
                 if (activeChanceContext && !activeChanceContext.player) activeChanceContext = null;
+                const hadMultiplayerHodriDuel = !!multiplayerHodriDuel;
+                multiplayerHodriDuel = snapshot.multiplayerHodriDuel || null;
+                multiplayerHodriDuelActionPending = false;
+                if (!multiplayerHodriDuel && hadMultiplayerHodriDuel) clearMultiplayerHodriDuelTimer();
+                const hadMultiplayerArena = !!multiplayerArena;
+                multiplayerArena = snapshot.multiplayerArena || null;
+                multiplayerArenaActionPending = false;
+                if (!multiplayerArena && hadMultiplayerArena) {
+                    multiplayerArenaFinishCallback = null;
+                    multiplayerArenaLocalDraft = null;
+                }
 
                 currentCombat = snapshot.currentCombat ? {
                     ...snapshot.currentCombat,
@@ -10260,8 +11719,21 @@
                         if ('checked' in control) control.checked = state.checked;
                     });
                 });
+                if (currentCombat) {
+                    renderCombatCardsGrid();
+                    updateCombatRoleControls();
+                }
+                if (multiplayerArena) renderMultiplayerArena();
                 updateUI();
                 drawMap();
+                if (!multiplayerArena && activeChanceContext &&
+                    activeChanceContext.player?.peerId !== multiplayerPeerId) {
+                    showRemoteChanceCardReveal({
+                        playerId: activeChanceContext.player.id,
+                        cardIndex: activeChanceContext.currentCardIndex
+                    });
+                }
+                if (multiplayerHodriDuel) renderMultiplayerHodriDuel();
             } finally {
                 multiplayerSuppressSync = false;
             }
@@ -10336,13 +11808,28 @@
             return false;
         }
 
+        function sendReliableMultiplayerPacket(packet) {
+            const connection = multiplayerClientConnection;
+            if (!connection || !connection.open) return false;
+            packet.sender = multiplayerPeerId;
+            packet.msgId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            multiplayerSeenMessages.add(packet.msgId);
+            try {
+                connection.send(packet);
+                return true;
+            } catch (error) {
+                console.error('Reliable multiplayer packet could not be sent.', error);
+                return false;
+            }
+        }
+
         function sendMultiplayerTradePacket(packet) {
             packet.peerId = multiplayerPeerId;
             if (multiplayerIsHost) {
                 handleHostMultiplayerTradePacket(packet, multiplayerPeerId, null);
                 return true;
             } else {
-                return sendMultiplayerPacket(packet);
+                return sendReliableMultiplayerPacket(packet);
             }
         }
 
@@ -10358,12 +11845,18 @@
                 msgId: `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
             };
             multiplayerSeenMessages.add(outgoing.msgId);
-            if (multiplayerChannel) multiplayerChannel.postMessage(outgoing);
+            let delivered = false;
             multiplayerHostConnections.forEach(connection => {
                 if (connection.open && multiplayerConnectionPlayers.get(connection.peer) === peerId) {
                     connection.send(outgoing);
+                    delivered = true;
                 }
             });
+            if (!delivered && multiplayerChannel) {
+                multiplayerChannel.postMessage(outgoing);
+                delivered = true;
+            }
+            return delivered;
         }
 
         function publishTradeSession(session, type = 'TRADE_SESSION_UPDATE', message = '') {
@@ -10392,7 +11885,8 @@
                 const offerFormIsStillHidden = session.status === 'active' &&
                     document.getElementById('trade-offer-content').classList.contains('hidden');
                 multiplayerTradeNegotiation = session;
-                pendingTradeInviteId = null;
+                if (session.offers?.[multiplayerPeerId]) multiplayerTradeOfferEditing = false;
+                clearPendingTradeInvite();
                 if (isNewSession) {
                     resetTradeOfferInputs();
                     document.getElementById('trade-modal').classList.remove('hidden');
@@ -10410,7 +11904,7 @@
             }
             if (packet.type === 'TRADE_SESSION_REJECTED') {
                 if (pendingTradeInviteId === packet.sessionId) {
-                    pendingTradeInviteId = null;
+                    clearPendingTradeInvite();
                     document.getElementById('trade-offer-content').classList.add('hidden');
                     document.getElementById('trade-invite-controls').classList.remove('hidden');
                     document.getElementById('trade-submit-button').classList.add('hidden');
@@ -10424,6 +11918,7 @@
                 if (multiplayerTradeNegotiation?.sessionId === packet.sessionId) {
                     if (multiplayerTradeOfferPendingSessionId === packet.sessionId) clearPendingMultiplayerTradeOffer();
                     delete multiplayerTradeNegotiation.offers[multiplayerPeerId];
+                    multiplayerTradeOfferEditing = true;
                     updateTradeNegotiationStatus();
                 }
                 setMultiplayerNotice(packet.message || 'Teklif doğrulanamadı.', 'rose');
@@ -10435,7 +11930,7 @@
                     multiplayerTradeNegotiation.sessionId === packet.sessionId)) {
                     if (multiplayerTradeOfferPendingSessionId === packet.sessionId) clearPendingMultiplayerTradeOffer();
                     multiplayerTradeNegotiation = null;
-                    pendingTradeInviteId = null;
+                    clearPendingTradeInvite();
                     document.getElementById('trade-modal').classList.add('hidden');
                     const resultNotice = packet.message || 'Ticaret görüşmesi sona erdi.';
                     multiplayerTradeResultNotice = resultNotice;
@@ -10471,7 +11966,8 @@
                     peerA: authenticatedPeerId,
                     peerB: target.peerId,
                     status: 'pending_accept',
-                    offers: {}
+                    offers: {},
+                    approvals: {}
                 };
                 if (!session.sessionId) return;
                 multiplayerTradeNegotiation = session;
@@ -10481,7 +11977,16 @@
 
             const session = multiplayerTradeNegotiation;
             if (!session || session.sessionId !== packet.sessionId ||
-                (authenticatedPeerId !== session.peerA && authenticatedPeerId !== session.peerB)) return;
+                (authenticatedPeerId !== session.peerA && authenticatedPeerId !== session.peerB)) {
+                if (packet.type === 'TRADE_OFFER' || packet.type === 'TRADE_APPROVE') {
+                    sendTradeMessageToPeer(authenticatedPeerId, {
+                        type: 'TRADE_OFFER_REJECTED',
+                        sessionId: packet.sessionId,
+                        message: 'Ticaret oturumu host üzerinde bulunamadı veya süresi doldu. Yeni bir davet başlatın.'
+                    });
+                }
+                return;
+            }
 
             if (packet.type === 'TRADE_ACCEPT') {
                 if (authenticatedPeerId !== session.peerB || session.status !== 'pending_accept') return;
@@ -10503,9 +12008,71 @@
                 return;
             }
 
-            if (packet.type !== 'TRADE_OFFER' || session.status !== 'active') return;
-            if (session.offers[authenticatedPeerId]) {
+            if (packet.type === 'TRADE_EDIT' && session.status === 'active' &&
+                session.offers[authenticatedPeerId] && !session.approvals?.[authenticatedPeerId]) {
+                delete session.offers[authenticatedPeerId];
+                session.approvals = {};
                 publishTradeSession(session);
+                return;
+            }
+
+            if (packet.type === 'TRADE_APPROVE' && session.status === 'active') {
+                const otherPeerId = authenticatedPeerId === session.peerA ? session.peerB : session.peerA;
+                if (!session.offers[authenticatedPeerId] || !session.offers[otherPeerId]) {
+                    sendTradeMessageToPeer(authenticatedPeerId, {
+                        type: 'TRADE_OFFER_REJECTED',
+                        sessionId: session.sessionId,
+                        message: 'İki tarafın teklifi de host üzerinde görünmüyor; teklifleri yeniden sunun.'
+                    });
+                    return;
+                }
+                const player = players.find(item => item.peerId === authenticatedPeerId);
+                const otherPlayer = players.find(item => item.peerId === otherPeerId);
+                if (!player || !otherPlayer ||
+                    !validateTradeOffer(player, session.offers[authenticatedPeerId]) ||
+                    !validateTradeOffer(otherPlayer, session.offers[otherPeerId])) {
+                    sendTradeMessageToPeer(authenticatedPeerId, {
+                        type: 'TRADE_OFFER_REJECTED',
+                        sessionId: session.sessionId,
+                        message: 'Teklifteki varlıklar değişti; lütfen teklifi yeniden düzenleyin.'
+                    });
+                    return;
+                }
+                session.approvals[authenticatedPeerId] = true;
+                if (!session.approvals[session.peerA] || !session.approvals[session.peerB]) {
+                    publishTradeSession(session);
+                    return;
+                }
+                const completed = commitMultiplayerTrade(session);
+                multiplayerTradeNegotiation = null;
+                publishTradeSession(session, 'TRADE_SESSION_FINISHED', completed
+                    ? 'İki taraf da teklifi onayladı; takas tamamlandı.'
+                    : 'Takas tamamlanamadı; oyuncuların varlıkları değişmiş olabilir.');
+                if (completed) {
+                    multiplayerVersion++;
+                    multiplayerSuppressSync = true;
+                    try {
+                        updateUI();
+                        drawMap();
+                    } finally {
+                        multiplayerSuppressSync = false;
+                    }
+                    broadcastMultiplayerPacket({
+                        type: 'GAME_STATE',
+                        version: multiplayerVersion,
+                        snapshot: captureMultiplayerSnapshot()
+                    });
+                }
+                return;
+            }
+
+            if (packet.type !== 'TRADE_OFFER' || session.status !== 'active') return;
+            if (session.approvals?.[session.peerA] || session.approvals?.[session.peerB]) {
+                sendTradeMessageToPeer(authenticatedPeerId, {
+                    type: 'TRADE_OFFER_REJECTED',
+                    sessionId: session.sessionId,
+                    message: 'Onaylanmış bir teklif artık değiştirilemez; yeni görüşme başlatın.'
+                });
                 return;
             }
             const player = players.find(item => item.peerId === authenticatedPeerId);
@@ -10518,31 +12085,8 @@
                 return;
             }
             session.offers[authenticatedPeerId] = packet.offer;
-            if (!session.offers[session.peerA] || !session.offers[session.peerB]) {
-                publishTradeSession(session);
-                return;
-            }
-
-            const completed = commitMultiplayerTrade(session);
-            multiplayerTradeNegotiation = null;
-            publishTradeSession(session, 'TRADE_SESSION_FINISHED', completed
-                ? 'İki teklif de onaylandı; takas tamamlandı.'
-                : 'Takas tamamlanamadı; oyuncuların varlıkları değişmiş olabilir.');
-            if (completed) {
-                multiplayerVersion++;
-                multiplayerSuppressSync = true;
-                try {
-                    updateUI();
-                    drawMap();
-                } finally {
-                    multiplayerSuppressSync = false;
-                }
-                broadcastMultiplayerPacket({
-                    type: 'GAME_STATE',
-                    version: multiplayerVersion,
-                    snapshot: captureMultiplayerSnapshot()
-                });
-            }
+            session.approvals = {};
+            publishTradeSession(session);
         }
 
         function commitMultiplayerTrade(session) {
@@ -10674,8 +12218,23 @@
                     handleHostMovementDiceRequest(packet, authenticatedPeerId, connection);
                     return;
                 }
+                if (packet.type === 'ARENA_ACTION') {
+                    const authenticatedPeerId = connection
+                        ? multiplayerConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    handleHostMultiplayerArenaAction(packet, authenticatedPeerId);
+                    return;
+                }
+                if (packet.type === 'HODRI_DUEL_ACTION') {
+                    const authenticatedPeerId = connection
+                        ? multiplayerConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    handleHostMultiplayerHodriDuelAction(packet, authenticatedPeerId);
+                    return;
+                }
                 if (packet.type === 'TRADE_INVITE' || packet.type === 'TRADE_ACCEPT' ||
                     packet.type === 'TRADE_DECLINE' || packet.type === 'TRADE_OFFER' ||
+                    packet.type === 'TRADE_EDIT' || packet.type === 'TRADE_APPROVE' ||
                     packet.type === 'TRADE_CANCEL') {
                     const authenticatedPeerId = connection
                         ? multiplayerConnectionPlayers.get(connection.peer)
@@ -10725,11 +12284,13 @@
                     return;
                 }
                 if (packet.type === 'GAME_STATE_PROPOSAL') {
-                    const activePlayer = players[activePlayerIndex];
+                    const actingPlayer = currentCombat
+                        ? getCombatControllerPlayer()
+                        : players[activePlayerIndex];
                     const authenticatedPeerId = connection
                         ? multiplayerConnectionPlayers.get(connection.peer)
                         : packet.peerId;
-                    if (!activePlayer || activePlayer.peerId !== packet.peerId ||
+                    if (!actingPlayer || actingPlayer.peerId !== packet.peerId ||
                         authenticatedPeerId !== packet.peerId ||
                         packet.baseVersion !== multiplayerVersion) {
                         if (multiplayerRoster.some(player => player.peerId === packet.peerId)) {
@@ -10773,6 +12334,16 @@
 
             if (packet.type === 'MULTIPLAYER_ACTION_EVENT') {
                 handleMultiplayerActionEvent(packet);
+                return;
+            }
+            if (packet.type === 'ARENA_ACTION_REJECTED') {
+                multiplayerArenaActionPending = false;
+                setMultiplayerNotice(String(packet.message || 'Arena hamlesi reddedildi.'), 'rose');
+                return;
+            }
+            if (packet.type === 'HODRI_DUEL_ACTION_REJECTED') {
+                multiplayerHodriDuelActionPending = false;
+                setMultiplayerNotice(String(packet.message || 'Hodri Meydanı hamlesi reddedildi.'), 'rose');
                 return;
             }
             if (packet.type === 'MAP_PREVIEW') {
@@ -10975,7 +12546,9 @@
             }
             document.addEventListener('click', event => {
                 if (isMultiplayerUiTarget(event.target)) return;
-                if (!multiplayerCanAct()) {
+                if (multiplayerArena ||
+                    (multiplayerHodriDuel && !isMultiplayerUiTarget(event.target)) ||
+                    !multiplayerCanAct()) {
                     event.preventDefault();
                     event.stopImmediatePropagation();
                 } else {
@@ -10990,7 +12563,9 @@
             ['mousedown', 'touchstart'].forEach(eventName => {
                 document.addEventListener(eventName, event => {
                     if (isMultiplayerUiTarget(event.target)) return;
-                    if (!multiplayerCanAct()) {
+                    if (multiplayerArena ||
+                        (multiplayerHodriDuel && !isMultiplayerUiTarget(event.target)) ||
+                        !multiplayerCanAct()) {
                         event.preventDefault();
                         event.stopImmediatePropagation();
                     }
@@ -10999,6 +12574,7 @@
             ['mouseup', 'touchend'].forEach(eventName => {
                 document.addEventListener(eventName, event => {
                     if (isMultiplayerUiTarget(event.target)) return;
+                    if (multiplayerArena) return;
                     if (!multiplayerCanAct()) return;
                     multiplayerActionAuthorized = true;
                     if (!isMultiplayerEventTarget(event.target)) {
