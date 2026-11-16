@@ -760,6 +760,8 @@
         let multiplayerPreviewSyncTimer = null;
         let multiplayerTradeResultNotice = null;
         let multiplayerTradeNegotiation = null;
+        let multiplayerTradeOfferPendingSessionId = null;
+        let multiplayerTradeOfferPendingTimer = null;
         let pendingTradeInviteId = null;
         let multiplayerDiceRequestPending = false;
         let activeMultiplayerMovementRollId = null;
@@ -7735,22 +7737,33 @@
             const status = document.getElementById('trade-status');
             status.classList.remove('hidden');
             const ownOfferSent = !!multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
+            const ownOfferPending = multiplayerTradeOfferPendingSessionId === multiplayerTradeNegotiation.sessionId;
             const otherPeerId = multiplayerTradeNegotiation.peerA === multiplayerPeerId
                 ? multiplayerTradeNegotiation.peerB
                 : multiplayerTradeNegotiation.peerA;
             const otherOfferSent = !!multiplayerTradeNegotiation.offers?.[otherPeerId];
             status.textContent = ownOfferSent
                 ? (otherOfferSent ? 'İki teklif de gönderildi; takas onaylanıyor…' : 'Teklifin gönderildi. Karşı tarafın teklifi bekleniyor…')
-                : (otherOfferSent ? 'Karşı taraf teklifini gönderdi. Teklifini göndererek takası tamamla.' : 'İki taraf da teklifini ayrı ayrı göndermeli.');
+                : ownOfferPending
+                    ? 'Teklif host’a iletiliyor; onay bekleniyor…'
+                    : (otherOfferSent ? 'Karşı taraf teklifini gönderdi. Teklifini göndererek takası tamamla.' : 'İki taraf da teklifini ayrı ayrı göndermeli.');
             const ownOffer = multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
             const ownPlayer = getTradeLocalPlayer();
             document.getElementById('trade-own-offer-preview').textContent = ownOffer
                 ? `Gönderdiğin teklif: ${summarizeTradeOffer(ownPlayer, ownOffer).join(' • ') || 'Varlık yok'}${ownOffer.pact ? ' • 🕊️ Pakt isteği' : ''}`
-                : 'Henüz teklif gönderilmedi.';
+                : ownOfferPending ? 'Teklifin host onayı bekliyor.' : 'Henüz teklif gönderilmedi.';
             document.querySelectorAll('#give-gold, #give-wood, #give-iron, .trade-give-card-cb, .trade-give-bldg-cb, #trade-request-pact')
-                .forEach(control => { control.disabled = ownOfferSent; });
-            document.getElementById('trade-submit-button').disabled = ownOfferSent;
-            document.getElementById('trade-submit-button').textContent = ownOfferSent ? '✅ Teklif Gönderildi' : '📨 Teklifi Gönder';
+                .forEach(control => { control.disabled = ownOfferSent || ownOfferPending; });
+            document.getElementById('trade-submit-button').disabled = ownOfferSent || ownOfferPending;
+            document.getElementById('trade-submit-button').textContent = ownOfferSent
+                ? '✅ Teklif Gönderildi'
+                : ownOfferPending ? '⏳ İletiliyor…' : '📨 Teklifi Gönder';
+        }
+
+        function clearPendingMultiplayerTradeOffer() {
+            if (multiplayerTradeOfferPendingTimer) clearTimeout(multiplayerTradeOfferPendingTimer);
+            multiplayerTradeOfferPendingTimer = null;
+            multiplayerTradeOfferPendingSessionId = null;
         }
 
         function respondToTradeInvite(accepted) {
@@ -7859,6 +7872,7 @@
                 });
                 multiplayerTradeNegotiation = null;
             }
+            clearPendingMultiplayerTradeOffer();
             document.getElementById('trade-modal').classList.add('hidden');
         }
 
@@ -7873,17 +7887,27 @@
                     return;
                 }
                 const sessionId = multiplayerTradeNegotiation.sessionId;
-                sendMultiplayerTradePacket({
+                if (!multiplayerIsHost) {
+                    clearPendingMultiplayerTradeOffer();
+                    multiplayerTradeOfferPendingSessionId = sessionId;
+                    multiplayerTradeOfferPendingTimer = setTimeout(() => {
+                        if (multiplayerTradeOfferPendingSessionId !== sessionId) return;
+                        clearPendingMultiplayerTradeOffer();
+                        if (multiplayerTradeNegotiation?.sessionId === sessionId) updateTradeNegotiationStatus();
+                        setMultiplayerNotice('Teklif host tarafından henüz onaylanmadı. Tekrar gönderebilirsiniz.', 'rose');
+                    }, 5000);
+                    updateTradeNegotiationStatus();
+                }
+                const sent = sendMultiplayerTradePacket({
                     type: 'TRADE_OFFER',
                     sessionId,
                     offer
                 });
-                if (!multiplayerIsHost && multiplayerTradeNegotiation?.sessionId === sessionId) {
-                    multiplayerTradeNegotiation.offers = {
-                        ...multiplayerTradeNegotiation.offers,
-                        [multiplayerPeerId]: offer
-                    };
+                if (!sent && !multiplayerIsHost) {
+                    clearPendingMultiplayerTradeOffer();
                     updateTradeNegotiationStatus();
+                    setMultiplayerNotice('Teklif gönderilemedi; oda bağlantısını kontrol edip tekrar deneyin.', 'rose');
+                    return;
                 }
                 return;
             }
@@ -10304,17 +10328,21 @@
             multiplayerSeenMessages.add(packet.msgId);
             if (multiplayerClientConnection && multiplayerClientConnection.open) {
                 multiplayerClientConnection.send(packet);
+                return true;
             } else if (multiplayerChannel) {
                 multiplayerChannel.postMessage(packet);
+                return true;
             }
+            return false;
         }
 
         function sendMultiplayerTradePacket(packet) {
             packet.peerId = multiplayerPeerId;
             if (multiplayerIsHost) {
                 handleHostMultiplayerTradePacket(packet, multiplayerPeerId, null);
+                return true;
             } else {
-                sendMultiplayerPacket(packet);
+                return sendMultiplayerPacket(packet);
             }
         }
 
@@ -10354,6 +10382,10 @@
             if (packet.type === 'TRADE_SESSION_UPDATE') {
                 const session = packet.session;
                 if (!session || (session.peerA !== multiplayerPeerId && session.peerB !== multiplayerPeerId)) return;
+                if (multiplayerTradeOfferPendingSessionId &&
+                    (multiplayerTradeOfferPendingSessionId !== session.sessionId || session.offers?.[multiplayerPeerId])) {
+                    clearPendingMultiplayerTradeOffer();
+                }
                 const previousSession = multiplayerTradeNegotiation;
                 const isNewSession = !previousSession || previousSession.sessionId !== session.sessionId;
                 const stageChanged = previousSession?.status !== session.status;
@@ -10390,6 +10422,7 @@
             }
             if (packet.type === 'TRADE_OFFER_REJECTED') {
                 if (multiplayerTradeNegotiation?.sessionId === packet.sessionId) {
+                    if (multiplayerTradeOfferPendingSessionId === packet.sessionId) clearPendingMultiplayerTradeOffer();
                     delete multiplayerTradeNegotiation.offers[multiplayerPeerId];
                     updateTradeNegotiationStatus();
                 }
@@ -10400,6 +10433,7 @@
                 const isParticipant = packet.peerA === multiplayerPeerId || packet.peerB === multiplayerPeerId;
                 if (isParticipant && (!multiplayerTradeNegotiation ||
                     multiplayerTradeNegotiation.sessionId === packet.sessionId)) {
+                    if (multiplayerTradeOfferPendingSessionId === packet.sessionId) clearPendingMultiplayerTradeOffer();
                     multiplayerTradeNegotiation = null;
                     pendingTradeInviteId = null;
                     document.getElementById('trade-modal').classList.add('hidden');
@@ -10469,7 +10503,11 @@
                 return;
             }
 
-            if (packet.type !== 'TRADE_OFFER' || session.status !== 'active' || session.offers[authenticatedPeerId]) return;
+            if (packet.type !== 'TRADE_OFFER' || session.status !== 'active') return;
+            if (session.offers[authenticatedPeerId]) {
+                publishTradeSession(session);
+                return;
+            }
             const player = players.find(item => item.peerId === authenticatedPeerId);
             if (!player || !validateTradeOffer(player, packet.offer)) {
                 sendTradeMessageToPeer(authenticatedPeerId, {
