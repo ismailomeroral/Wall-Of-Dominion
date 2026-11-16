@@ -295,6 +295,7 @@
                 </div>
                 <h1 class="text-2xl sm:text-3xl font-bold text-amber-400 font-medieval tracking-wide">WALLS OF DOMINION</h1>
                 <p class="text-xs text-slate-400 mt-0.5 mb-4">Sağdaki haritayı fare/dokunmatik ile inceleyebilir, sayıları değiştirip yeni harita üretebilirsiniz.</p>
+                <div id="multiplayer-setup-notice" class="hidden text-xs font-semibold rounded-lg px-3 py-2 mb-3 border"></div>
 
                 <!-- Oyuncu Sayısı & Harita Büyüklüğü -->
                 <div class="grid grid-cols-2 gap-3 mb-4">
@@ -427,7 +428,7 @@
             <p id="initiative-subtitle" class="text-xs text-slate-300 mb-4">En yüksek zarı atan oyuncu ilk Şehir Kurma Noktasını seçer.</p>
             <div id="initiative-results" class="space-y-2 mb-6 text-left"></div>
             <div class="flex gap-3">
-                <button id="btn-reroll-initiative" onclick="rollInitiativeDice()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-sm border border-slate-600 disabled:opacity-40">
+                <button id="btn-reroll-initiative" data-multiplayer-event="dice" onclick="rollInitiativeDice()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-sm border border-slate-600 disabled:opacity-40">
                     🔄 Tekrar Zar At
                 </button>
                 <button id="btn-start-city-placement" onclick="beginCityPlacementPhase()" class="flex-1 gold-btn text-white font-bold py-2.5 px-4 rounded-xl text-sm disabled:opacity-40">
@@ -567,6 +568,13 @@
                 <div id="trade-invite-controls" class="hidden">
                     <button onclick="inviteTradeTarget()" class="w-full gold-btn text-white py-2.5 rounded-xl text-xs font-bold">🤝 Ticaret Daveti Gönder</button>
                 </div>
+                <div id="trade-incoming-controls" class="hidden bg-indigo-950/70 border border-indigo-500/40 rounded-xl p-3 space-y-2">
+                    <div id="trade-incoming-message" class="text-sm font-bold text-indigo-200"></div>
+                    <div class="flex gap-2">
+                        <button onclick="respondToTradeInvite(true)" class="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded-lg text-xs font-bold">✅ Daveti Kabul Et</button>
+                        <button onclick="respondToTradeInvite(false)" class="flex-1 bg-rose-900 hover:bg-rose-800 text-white py-2 rounded-lg text-xs font-bold">✕ Reddet</button>
+                    </div>
+                </div>
 
                 <div id="trade-offer-content" class="space-y-3">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
@@ -586,6 +594,7 @@
                             <div class="text-[11px] font-semibold text-amber-300 mb-1">🏗️ Devredilecek Bina Tapuların:</div>
                             <div id="trade-give-buildings-list" class="space-y-1 max-h-24 overflow-y-auto pr-1 text-[11px]"></div>
                         </div>
+                        <div id="trade-own-offer-preview" class="text-[11px] text-emerald-200 bg-emerald-950/40 rounded-lg px-2 py-1.5">Henüz teklif gönderilmedi.</div>
                     </div>
 
                     <!-- SAĞ: ALINACAK UNSURLAR -->
@@ -614,8 +623,8 @@
                     <input id="trade-request-pact" type="checkbox" class="mt-0.5 accent-sky-500">
                     <span id="trade-pact-label">🕊️ Bu ticaretle 1 turluk saldırmazlık paktı imzalamayı kabul ediyorum.</span>
                 </label>
-                <div id="trade-status" class="hidden text-center text-[11px] font-semibold text-amber-300"></div>
                 </div>
+                <div id="trade-status" class="hidden text-center text-[11px] font-semibold text-amber-300"></div>
             </div>
 
             <div class="flex gap-2 mt-4">
@@ -747,8 +756,12 @@
         let multiplayerRoomCode = null;
         let multiplayerPeerId = null;
         let multiplayerIsHost = false;
+        let multiplayerPreviewSyncTimer = null;
+        let multiplayerTradeResultNotice = null;
         let multiplayerTradeNegotiation = null;
         let pendingTradeInviteId = null;
+        let multiplayerDiceRequestPending = false;
+        let activeMultiplayerMovementRollId = null;
         let multiplayerRoster = [];
         let multiplayerPeer = null;
         let multiplayerHostConnections = new Map();
@@ -1295,6 +1308,7 @@
         function onManualChanceToggleChange() {
             const cb = document.getElementById('cfg-manual-chance-pick');
             allowManualChanceCardPick = !!(cb && cb.checked);
+            scheduleMultiplayerPreviewSync();
         }
 
         function onMapRadiusChange() {
@@ -1364,6 +1378,67 @@
             generateWorldMap();
             updateMapStatsSummary();
             drawMap();
+            scheduleMultiplayerPreviewSync();
+        }
+
+        function captureMultiplayerMapPreview() {
+            return {
+                mapRadius,
+                hexSize,
+                grid: Array.from(grid.entries()),
+                riverPathKeys: riverPaths.map(path => path.map(hex => hex.key)),
+                initialChanceCount,
+                setup: {
+                    playerCount: parseInt(document.getElementById('setup-player-count').value),
+                    radius: mapRadius,
+                    cityPlots: parseInt(document.getElementById('cfg-city-plots').value),
+                    lumber: parseInt(document.getElementById('cfg-lumber').value),
+                    mine: parseInt(document.getElementById('cfg-mine').value),
+                    chance: parseInt(document.getElementById('cfg-chance').value),
+                    manualChancePick: !!document.getElementById('cfg-manual-chance-pick').checked
+                }
+            };
+        }
+
+        function scheduleMultiplayerPreviewSync() {
+            if (!multiplayerSession || !multiplayerIsHost || gameState !== 'PREVIEW') return;
+            if (multiplayerPreviewSyncTimer) clearTimeout(multiplayerPreviewSyncTimer);
+            multiplayerPreviewSyncTimer = setTimeout(() => {
+                multiplayerPreviewSyncTimer = null;
+                broadcastMultiplayerPacket({
+                    type: 'MAP_PREVIEW',
+                    preview: captureMultiplayerMapPreview()
+                });
+            }, 100);
+        }
+
+        function applyMultiplayerMapPreview(preview) {
+            if (multiplayerIsHost || gameState !== 'PREVIEW' || !preview ||
+                !Array.isArray(preview.grid) || !preview.setup) return;
+            mapRadius = preview.mapRadius;
+            hexSize = preview.hexSize;
+            grid = new Map(preview.grid);
+            riverPaths = (preview.riverPathKeys || []).map(path =>
+                path.map(key => grid.get(key)).filter(Boolean)
+            );
+            initialChanceCount = preview.initialChanceCount;
+            document.getElementById('setup-player-count').value = String(preview.setup.playerCount);
+            document.getElementById('setup-map-radius').value = String(preview.setup.radius);
+            document.getElementById('cfg-city-plots').value = String(preview.setup.cityPlots);
+            document.getElementById('cfg-city-plots').min = String(preview.setup.playerCount + 1);
+            document.getElementById('cfg-lumber').value = String(preview.setup.lumber);
+            document.getElementById('cfg-mine').value = String(preview.setup.mine);
+            document.getElementById('cfg-chance').value = String(preview.setup.chance);
+            document.getElementById('cfg-manual-chance-pick').checked = !!preview.setup.manualChancePick;
+            document.getElementById('cfg-chance').max = getMaxChanceForRadius(mapRadius);
+            document.getElementById('max-chance-label').textContent = ` / ${getMaxChanceForRadius(mapRadius)}`;
+            document.getElementById('val-city-plots').textContent = preview.setup.cityPlots;
+            document.getElementById('val-lumber').textContent = preview.setup.lumber;
+            document.getElementById('val-mine').textContent = preview.setup.mine;
+            document.getElementById('val-chance').textContent = preview.setup.chance;
+            allowManualChanceCardPick = !!preview.setup.manualChancePick;
+            updateMapStatsSummary();
+            drawMap();
         }
 
         function updateMapStatsSummary() {
@@ -1395,6 +1470,7 @@
         }
 
         function initiateDiceOrderScreen() {
+            if (multiplayerSession && !multiplayerIsHost) return;
             const count = multiplayerSession
                 ? multiplayerRoster.length
                 : parseInt(document.getElementById('setup-player-count').value);
@@ -1439,34 +1515,47 @@
 
             document.getElementById('setup-modal').classList.add('hidden');
             document.getElementById('initiative-modal').classList.remove('hidden');
-            rollInitiativeDice();
+            if (multiplayerSession && multiplayerIsHost) {
+                scheduleMultiplayerSync();
+                setTimeout(rollInitiativeDice, 200);
+            } else {
+                rollInitiativeDice();
+            }
         }
 
-        function rollInitiativeDice() {
+        function diceAnimationFace(seed, tick, dieIndex) {
+            let value = (seed + Math.imul(tick + 1, 0x9e3779b9) + Math.imul(dieIndex + 1, 0x85ebca6b)) >>> 0;
+            value ^= value >>> 16;
+            value = Math.imul(value, 0x7feb352d);
+            value ^= value >>> 15;
+            return (value >>> 0) % 6;
+        }
+
+        function animateInitiativeRoll(packet, onComplete) {
             if (isRollingInitiative) return;
             isRollingInitiative = true;
-
+            document.getElementById('setup-modal').classList.add('hidden');
+            document.getElementById('initiative-modal').classList.remove('hidden');
             const rerollBtn = document.getElementById('btn-reroll-initiative');
             const startBtn = document.getElementById('btn-start-city-placement');
             const subEl = document.getElementById('initiative-subtitle');
+            const canControl = !multiplayerSession || multiplayerIsHost;
             if (rerollBtn) rerollBtn.disabled = true;
             if (startBtn) startBtn.disabled = true;
             if (subEl) subEl.textContent = '🎲 Krallıklar sıra belirleme zarlarını atıyor...';
 
             const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
             const container = document.getElementById('initiative-results');
-
             let ticks = 0;
             const iv = setInterval(() => {
-                playSFX('dice_tick');
-                container.innerHTML = players.map(p => {
-                    const temp = Math.floor(Math.random() * 6);
+                container.innerHTML = packet.rolls.map((player, index) => {
+                    const temp = diceAnimationFace(packet.seed, ticks, index);
                     return `
                         <div class="flex items-center justify-between bg-slate-900/90 border border-amber-500/30 px-3.5 py-2 rounded-xl">
                             <div class="flex items-center gap-2.5">
                                 <span class="text-xs font-bold text-slate-400">🎲</span>
-                                <span class="w-3.5 h-3.5 rounded-full" style="background:${p.color}"></span>
-                                <span class="text-sm font-semibold text-white">${p.name}</span>
+                                <span class="w-3.5 h-3.5 rounded-full" style="background:${player.color}"></span>
+                                <span class="text-sm font-semibold text-white">${player.name}</span>
                             </div>
                             <div class="dice-rolling flex items-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-600 border border-white px-2.5 py-1 rounded-lg text-slate-950 font-extrabold text-sm shadow">
                                 ${faces[temp]} ${temp + 1}
@@ -1474,50 +1563,72 @@
                         </div>
                     `;
                 }).join('');
-
                 ticks++;
+                playSFX('dice_tick');
                 if (ticks >= 11) {
                     clearInterval(iv);
                     playSFX('dice_done');
-                    let pool = [6, 5, 4, 3, 2, 1];
-                    players.forEach(p => {
-                        const idx = Math.floor(Math.random() * pool.length);
-                        p.initiativeRoll = pool.splice(idx, 1)[0];
-                    });
-                    players.sort((a, b) => b.initiativeRoll - a.initiativeRoll);
-                    players.forEach((p, idx) => p.id = idx);
-
-                    container.innerHTML = '';
-                    players.forEach((p, idx) => {
+                    const rankedRolls = packet.rolls.slice().sort((a, b) => b.roll - a.roll);
+                    container.innerHTML = rankedRolls.map((player, idx) => {
                         const isFirst = idx === 0;
-                        container.innerHTML += `
+                        return `
                             <div class="flex items-center justify-between ${isFirst ? 'bg-amber-950/50 border-amber-400 shadow-lg' : 'bg-slate-900/90 border-slate-800'} border px-3.5 py-2 rounded-xl transition-all">
                                 <div class="flex items-center gap-2.5">
                                     <span class="text-xs font-bold ${isFirst ? 'text-amber-300' : 'text-amber-400'}">#${idx + 1}</span>
-                                    <span class="w-3.5 h-3.5 rounded-full" style="background:${p.color}"></span>
-                                    <span class="text-sm font-semibold text-white">${p.name}</span>
+                                    <span class="w-3.5 h-3.5 rounded-full" style="background:${player.color}"></span>
+                                    <span class="text-sm font-semibold text-white">${player.name}</span>
                                     ${isFirst ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/50 text-[10px] font-bold text-amber-300">👑 İLK SEÇİM</span>' : ''}
                                 </div>
                                 <div class="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 rounded-lg text-amber-300 font-bold text-sm">
-                                    ${faces[p.initiativeRoll - 1]} ${p.initiativeRoll}
+                                    ${faces[player.roll - 1]} ${player.roll}
                                 </div>
                             </div>
                         `;
-                    });
-
-                    if (subEl) subEl.textContent = `🏆 En yüksek zarı atan ${players[0].name} ilk Şehir Kurma Noktasını seçecek!`;
-                    if (rerollBtn) rerollBtn.disabled = false;
-                    if (startBtn) startBtn.disabled = false;
+                    }).join('');
+                    if (subEl) subEl.textContent = `🏆 En yüksek zarı atan ${rankedRolls[0].name} ilk Şehir Kurma Noktasını seçecek!`;
+                    if (rerollBtn) rerollBtn.disabled = !canControl;
+                    if (startBtn) startBtn.disabled = !canControl;
                     isRollingInitiative = false;
-                    if (multiplayerIsHost) {
-                        scheduleMultiplayerSync();
-                        setTimeout(() => {
-                            multiplayerActionAuthorized = true;
-                            beginCityPlacementPhase();
-                        }, 700);
-                    }
+                    if (onComplete) onComplete(rankedRolls);
                 }
             }, 80);
+        }
+
+        function rollInitiativeDice() {
+            if (isRollingInitiative || (multiplayerSession && !multiplayerIsHost)) return;
+            let pool = [6, 5, 4, 3, 2, 1];
+            const rolls = players.map(player => {
+                const idx = Math.floor(Math.random() * pool.length);
+                return {
+                    id: player.id,
+                    peerId: player.peerId,
+                    name: player.name,
+                    color: player.color,
+                    roll: pool.splice(idx, 1)[0]
+                };
+            });
+            const packet = {
+                type: 'INITIATIVE_DICE_START',
+                rollId: `${multiplayerPeerId || 'local'}_${Date.now()}`,
+                seed: Math.floor(Math.random() * 0x7fffffff),
+                rolls
+            };
+            if (multiplayerSession) broadcastMultiplayerPacket(packet);
+            animateInitiativeRoll(packet, rankedRolls => {
+                const rollByPeer = new Map(rankedRolls.map(roll => [roll.peerId || `local-${roll.id}`, roll.roll]));
+                players.forEach(player => {
+                    player.initiativeRoll = rollByPeer.get(player.peerId || `local-${player.id}`);
+                });
+                players.sort((a, b) => b.initiativeRoll - a.initiativeRoll);
+                players.forEach((player, idx) => player.id = idx);
+                if (multiplayerSession && multiplayerIsHost) {
+                    scheduleMultiplayerSync();
+                    setTimeout(() => {
+                        multiplayerActionAuthorized = true;
+                        beginCityPlacementPhase();
+                    }, 700);
+                }
+            });
         }
 
         function beginCityPlacementPhase() {
@@ -2314,12 +2425,67 @@
 
         function rollMovementDice() {
             const p = getActivePlayer();
-            if (p.hasRolledThisTurn || isRollingDice) return;
+            if (!p || p.hasRolledThisTurn || isRollingDice || multiplayerDiceRequestPending) return;
+            if (multiplayerSession) {
+                if (!multiplayerCanAct()) return;
+                multiplayerDiceRequestPending = true;
+                const request = {
+                    type: 'MOVEMENT_DICE_REQUEST',
+                    peerId: multiplayerPeerId,
+                    rollId: `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+                };
+                if (multiplayerIsHost) handleHostMovementDiceRequest(request, multiplayerPeerId, null);
+                else sendMultiplayerPacket(request);
+                return;
+            }
+            playMovementDiceAnimation(createMovementDicePacket(p, `local_${Date.now()}`));
+        }
 
-            const useTwoDiceLowest = !!p.activeRollTwoLowestThisTurn;
-            const useMax3Cap = !!p.activeMaxSteps3ThisTurn;
-            const ebeleBonus = p.ebeleBonusMove || 0;
+        function createMovementDicePacket(player, rollId) {
+            const useTwoDiceLowest = !!player.activeRollTwoLowestThisTurn;
+            const useMax3Cap = !!player.activeMaxSteps3ThisTurn;
+            const ebeleBonus = player.ebeleBonusMove || 0;
+            const roll1 = Math.floor(Math.random() * 6) + 1;
+            const roll2 = Math.floor(Math.random() * 6) + 1;
+            const baseRoll = useTwoDiceLowest ? Math.min(roll1, roll2) : roll1;
+            let effectiveAP = baseRoll;
+            const notes = [];
+            if (useTwoDiceLowest) notes.push(`😴 2 Zar: ${roll1} & ${roll2} → En Düşük: ${baseRoll}`);
+            if (useMax3Cap && effectiveAP > 3) {
+                notes.push(`🌧️ Kara Bulutlar: ${effectiveAP} → Maks 3 Hücre`);
+                effectiveAP = 3;
+            } else if (useMax3Cap) {
+                notes.push('🌧️ Kara Bulutlar (Maks 3 Hücre)');
+            }
+            if (ebeleBonus > 0) {
+                effectiveAP += ebeleBonus;
+                notes.push(`🎯 Kolaysa Ebele Ödülü: +${ebeleBonus} Hücre`);
+            }
+            return {
+                type: 'MOVEMENT_DICE_START',
+                rollId,
+                playerId: player.id,
+                playerPeerId: player.peerId,
+                seed: Math.floor(Math.random() * 0x7fffffff),
+                duration: 1600,
+                outcome: { roll1, roll2, baseRoll, effectiveAP, notes, useTwoDiceLowest }
+            };
+        }
 
+        function playMovementDiceAnimation(packet) {
+            if (!packet || !packet.outcome || !Array.isArray(packet.outcome.notes) ||
+                activeMultiplayerMovementRollId === packet.rollId) return;
+            activeMultiplayerMovementRollId = packet.rollId;
+            multiplayerDiceRequestPending = false;
+            const p = players.find(player => player.id === packet.playerId);
+            if (!p) {
+                activeMultiplayerMovementRollId = null;
+                return;
+            }
+            const { roll1, roll2, baseRoll, effectiveAP, notes, useTwoDiceLowest } = packet.outcome;
+            const duration = Math.max(1000, Math.min(3000, packet.duration || 1600));
+            const startedAt = performance.now();
+            const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
             isRollingDice = true;
             const overlay = document.getElementById('dice-anim-overlay');
             const box = document.getElementById('dice-anim-box');
@@ -2338,45 +2504,21 @@
             label.textContent = useTwoDiceLowest
                 ? `😴 ${p.name} 2 Yorgun Zar Atıyor (En Düşüğü Seçilecek)...`
                 : `${p.name} Zar Atıyor...`;
-
-            const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-            let ticks = 0;
+            let shownTick = -1;
+            let resultShown = false;
             const interval = setInterval(() => {
-                if (useTwoDiceLowest) {
-                    const t1 = Math.floor(Math.random() * 6);
-                    const t2 = Math.floor(Math.random() * 6);
+                const elapsed = performance.now() - startedAt;
+                const tick = Math.min(10, Math.floor(elapsed / 75));
+                if (tick !== shownTick && elapsed < 750) {
+                    shownTick = tick;
+                    const t1 = diceAnimationFace(packet.seed, tick, 0);
+                    const t2 = diceAnimationFace(packet.seed, tick, 1);
                     box.textContent = `${faces[t1]} ${t1 + 1}`;
-                    box2.textContent = `${faces[t2]} ${t2 + 1}`;
-                } else {
-                    const temp = Math.floor(Math.random() * 6);
-                    box.textContent = `${faces[temp]} ${temp + 1}`;
+                    if (useTwoDiceLowest) box2.textContent = `${faces[t2]} ${t2 + 1}`;
+                    playSFX('dice_tick');
                 }
-                playSFX('dice_tick');
-                ticks++;
-                if (ticks >= 10) {
-                    clearInterval(interval);
-                    const roll1 = Math.floor(Math.random() * 6) + 1;
-                    const roll2 = Math.floor(Math.random() * 6) + 1;
-                    let baseRoll = useTwoDiceLowest ? Math.min(roll1, roll2) : roll1;
-                    let effectiveAP = baseRoll;
-
-                    const notes = [];
-                    if (useTwoDiceLowest) {
-                        notes.push(`😴 2 Zar: ${roll1} & ${roll2} → En Düşük: ${baseRoll}`);
-                        p.activeRollTwoLowestThisTurn = false;
-                    }
-                    if (useMax3Cap && effectiveAP > 3) {
-                        notes.push(`🌧️ Kara Bulutlar: ${effectiveAP} → Maks 3 Hücre`);
-                        effectiveAP = 3;
-                    } else if (useMax3Cap) {
-                        notes.push(`🌧️ Kara Bulutlar (Maks 3 Hücre)`);
-                    }
-                    if (ebeleBonus > 0) {
-                        effectiveAP += ebeleBonus;
-                        notes.push(`🎯 Kolaysa Ebele Ödülü: +${ebeleBonus} Hücre`);
-                        p.ebeleBonusMove = 0;
-                    }
-
+                if (!resultShown && elapsed >= 750) {
+                    resultShown = true;
                     box.classList.remove('dice-rolling');
                     box2.classList.remove('dice-rolling');
                     if (useTwoDiceLowest) {
@@ -2390,38 +2532,35 @@
                             box.classList.add('opacity-45', 'scale-90');
                         }
                     } else {
-                        box.textContent = `${faces[baseRoll - 1]} ${effectiveAP}`;
+                        box.textContent = `${faces[roll1 - 1]} ${effectiveAP}`;
                     }
-                    label.textContent = notes.length > 0
+                    label.textContent = notes.length
                         ? `${effectiveAP} AP Kazandınız! (${notes.join(' | ')})`
                         : `${effectiveAP} Hareket Puanı (AP) Kazandınız!`;
                     playSFX('dice_done');
-
-                    setTimeout(() => {
-                        overlay.classList.add('hidden');
-                        box2.classList.add('hidden');
-                        box.classList.remove('opacity-45', 'scale-90', 'ring-4', 'ring-emerald-300');
-                        box2.classList.remove('opacity-45', 'scale-90', 'ring-4', 'ring-emerald-300');
-                        isRollingDice = false;
-                        p.diceRoll = effectiveAP;
-                        p.remainingAP = effectiveAP;
-                        p.hasRolledThisTurn = true;
-
-                        // Piyonların harekete başladığı konumları kaydet (Oyuncu onaylamadan önce sıfırlayabilsin)
-                        saveMovementSnapshot(p);
-
-                        const noteLog = notes.length > 0 ? ` <i>(${notes.join(', ')})</i>` : '';
-                        addLog(`🎲 <b>${p.name}</b> hareket zarı attı: <b>${effectiveAP} AP</b>!${noteLog} Piyonlarınıza tıklayarak adım adım ilerleyin.`);
-
-                        const readyArmyIdx = p.armies.findIndex(a => a.frozenTurns === 0);
-                        if (readyArmyIdx !== -1) {
-                            selectArmyPawn(p.id, readyArmyIdx);
-                        }
-                        updateUI();
-                        drawMap();
-                    }, 850);
                 }
-            }, 75);
+                if (elapsed < duration) return;
+                clearInterval(interval);
+                overlay.classList.add('hidden');
+                box2.classList.add('hidden');
+                box.classList.remove('opacity-45', 'scale-90', 'ring-4', 'ring-emerald-300');
+                box2.classList.remove('opacity-45', 'scale-90', 'ring-4', 'ring-emerald-300');
+                isRollingDice = false;
+                activeMultiplayerMovementRollId = null;
+                if (multiplayerSession && p.peerId !== multiplayerPeerId) return;
+                if (useTwoDiceLowest) p.activeRollTwoLowestThisTurn = false;
+                if (notes.some(note => note.includes('Kolaysa Ebele'))) p.ebeleBonusMove = 0;
+                p.diceRoll = effectiveAP;
+                p.remainingAP = effectiveAP;
+                p.hasRolledThisTurn = true;
+                saveMovementSnapshot(p);
+                const noteLog = notes.length ? ` <i>(${notes.join(', ')})</i>` : '';
+                addLog(`🎲 <b>${p.name}</b> hareket zarı attı: <b>${effectiveAP} AP</b>!${noteLog} Piyonlarınıza tıklayarak adım adım ilerleyin.`);
+                const readyArmyIdx = p.armies.findIndex(army => army.frozenTurns === 0);
+                if (readyArmyIdx !== -1) selectArmyPawn(p.id, readyArmyIdx);
+                updateUI();
+                drawMap();
+            }, 40);
         }
 
         // Tur içi hareket başlangıcındaki ordu konumlarını ve AP miktarını kaydeder
@@ -7338,6 +7477,7 @@
             document.getElementById('trade-invite-controls').classList.toggle('hidden', !multiplayerSession);
             document.getElementById('trade-offer-content').classList.toggle('hidden', !!multiplayerSession);
             document.getElementById('trade-submit-button').classList.toggle('hidden', !!multiplayerSession);
+            document.getElementById('trade-incoming-controls').classList.add('hidden');
             document.getElementById('trade-pact-choice').classList.toggle('hidden', !!multiplayerSession);
             document.getElementById('trade-pact-label').textContent = multiplayerSession
                 ? '🕊️ Bu ticaretle 1 turluk saldırmazlık paktı imzalamayı kabul ediyorum. Pakt yalnızca iki taraf da seçerse kurulur.'
@@ -7464,7 +7604,7 @@
                 targetSelect.disabled = true;
                 document.getElementById('trade-take-panel').classList.add('hidden');
                 document.getElementById('trade-remote-offer-panel').classList.remove('hidden');
-                document.getElementById('trade-remote-offer-title').textContent = `📥 ${target.name} adlı oyuncunun teklifi`;
+                document.getElementById('trade-remote-offer-title').textContent = `📥 ${target.name}: verebilecekleri / teklifi`;
                 document.getElementById('trade-invite-controls').classList.add('hidden');
                 document.getElementById('trade-offer-content').classList.remove('hidden');
                 document.getElementById('trade-submit-button').classList.remove('hidden');
@@ -7480,17 +7620,27 @@
             const panel = document.getElementById('trade-remote-offer');
             const offer = multiplayerTradeNegotiation?.offers?.[target.peerId];
             if (!offer) {
-                panel.textContent = 'Karşı taraf henüz teklifini göndermedi.';
+                const available = [
+                    `🪙 ${target.gold} Altın`,
+                    `🪵 ${target.wood} Odun`,
+                    `⛏️ ${target.iron} Demir`,
+                    ...(target.heldCards || []).map(card => `🎒 ${card.title.replace(/^\d+\.\s*/, '')}`),
+                    ...Array.from(grid.values())
+                        .filter(building => building.buildingOwner === target.id && ['Kale', 'Maden', 'Oduncu'].includes(building.poi))
+                        .map(building => `🏗️ ${building.poi} (${building.q},${building.r})`)
+                ];
+                panel.innerHTML = `<div class="text-slate-400">Verebilecekleri (henüz teklif değil):</div>${available.map(item => `<div>${item}</div>`).join('')}`;
                 return;
             }
             const summary = summarizeTradeOffer(target, offer);
-            panel.innerHTML = summary.length
+            panel.innerHTML = `<div class="text-emerald-300">Gönderdiği teklif:</div>${summary.length
                 ? summary.map(item => `<div>${item}</div>`).join('')
-                : '<div>Varlık teklif edilmedi.</div>';
+                : '<div>Varlık teklif edilmedi.</div>'}`;
             if (offer.pact) panel.innerHTML += '<div class="text-sky-300">🕊️ Saldırmazlık paktı istiyor</div>';
         }
 
         function summarizeTradeOffer(player, offer) {
+            if (!player) return [];
             const summary = [];
             if (offer.gold) summary.push(`🪙 ${offer.gold} Altın`);
             if (offer.wood) summary.push(`🪵 ${offer.wood} Odun`);
@@ -7518,8 +7668,64 @@
             status.textContent = ownOfferSent
                 ? (otherOfferSent ? 'İki teklif de gönderildi; takas onaylanıyor…' : 'Teklifin gönderildi. Karşı tarafın teklifi bekleniyor…')
                 : (otherOfferSent ? 'Karşı taraf teklifini gönderdi. Teklifini göndererek takası tamamla.' : 'İki taraf da teklifini ayrı ayrı göndermeli.');
+            const ownOffer = multiplayerTradeNegotiation.offers?.[multiplayerPeerId];
+            const ownPlayer = getTradeLocalPlayer();
+            document.getElementById('trade-own-offer-preview').textContent = ownOffer
+                ? `Gönderdiğin teklif: ${summarizeTradeOffer(ownPlayer, ownOffer).join(' • ') || 'Varlık yok'}${ownOffer.pact ? ' • 🕊️ Pakt isteği' : ''}`
+                : 'Henüz teklif gönderilmedi.';
+            document.querySelectorAll('#give-gold, #give-wood, #give-iron, .trade-give-card-cb, .trade-give-bldg-cb, #trade-request-pact')
+                .forEach(control => { control.disabled = ownOfferSent; });
             document.getElementById('trade-submit-button').disabled = ownOfferSent;
             document.getElementById('trade-submit-button').textContent = ownOfferSent ? '✅ Teklif Gönderildi' : '📨 Teklifi Gönder';
+        }
+
+        function respondToTradeInvite(accepted) {
+            const session = multiplayerTradeNegotiation;
+            if (!session || session.status !== 'pending_accept' || session.peerB !== multiplayerPeerId) return;
+            if (!accepted) {
+                closeTradeModal();
+                return;
+            }
+            document.getElementById('trade-incoming-controls').classList.add('hidden');
+            document.getElementById('trade-status').textContent = 'Davet kabul edildi; teklif masası açılıyor…';
+            document.getElementById('trade-status').classList.remove('hidden');
+            sendMultiplayerTradePacket({
+                type: 'TRADE_ACCEPT',
+                sessionId: session.sessionId
+            });
+        }
+
+        function renderTradeSessionStage(rebuildAssets) {
+            const session = multiplayerTradeNegotiation;
+            if (!session) return;
+            const isInvitee = session.peerB === multiplayerPeerId;
+            const isWaitingForAcceptance = session.status === 'pending_accept';
+            const target = getTradeCounterparty();
+            document.getElementById('trade-invite-controls').classList.add('hidden');
+            document.getElementById('trade-incoming-controls').classList.toggle('hidden', !isWaitingForAcceptance || !isInvitee);
+            document.getElementById('trade-offer-content').classList.toggle('hidden', isWaitingForAcceptance);
+            document.getElementById('trade-submit-button').classList.toggle('hidden', isWaitingForAcceptance);
+            if (target) {
+                const targetSelect = document.getElementById('trade-target-player');
+                targetSelect.innerHTML = `<option value="${target.id}">${target.name}</option>`;
+                targetSelect.value = String(target.id);
+                targetSelect.disabled = true;
+            }
+            if (isWaitingForAcceptance) {
+                const initiator = players.find(player => player.peerId === session.peerA);
+                if (isInvitee) {
+                    document.getElementById('trade-incoming-message').textContent =
+                        `${initiator ? initiator.name : 'Bir oyuncu'} seninle ticaret yapmak istiyor.`;
+                    document.getElementById('trade-status').classList.add('hidden');
+                } else {
+                    document.getElementById('trade-status').textContent =
+                        `${players.find(player => player.peerId === session.peerB)?.name || 'Oyuncu'} daveti kabul ederse teklif masası açılacak.`;
+                    document.getElementById('trade-status').classList.remove('hidden');
+                }
+                return;
+            }
+            document.getElementById('trade-incoming-controls').classList.add('hidden');
+            if (rebuildAssets) renderTradeAssetsLists();
         }
 
         function inviteTradeTarget() {
@@ -7571,7 +7777,10 @@
         function closeTradeModal() {
             if (multiplayerSession && multiplayerTradeNegotiation) {
                 sendMultiplayerTradePacket({
-                    type: 'TRADE_CANCEL',
+                    type: multiplayerTradeNegotiation.status === 'pending_accept' &&
+                        multiplayerTradeNegotiation.peerB === multiplayerPeerId
+                        ? 'TRADE_DECLINE'
+                        : 'TRADE_CANCEL',
                     sessionId: multiplayerTradeNegotiation.sessionId
                 });
                 multiplayerTradeNegotiation = null;
@@ -8078,7 +8287,7 @@
                                 ⏭️ Sabit Kal ve Eylem Aşamasına Geç →
                             </button>
                         ` : `
-                            <button onclick="rollMovementDice()" class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs">
+                            <button data-multiplayer-event="dice" onclick="rollMovementDice()" class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs">
                                 ${p.activeRollTwoLowestThisTurn ? '😴🎲 2 Zar At (En Düşüğü)' : '🎲 Zar At (1-6)'}${p.ebeleBonusMove > 0 ? ` +${p.ebeleBonusMove}` : ''}
                             </button>
                         `}
@@ -9643,6 +9852,10 @@
             );
         }
 
+        function isMultiplayerEventTarget(target) {
+            return target instanceof Element && !!target.closest('[data-multiplayer-event]');
+        }
+
         function toggleMultiplayerChat() {
             if (!multiplayerSession) return;
             const panel = document.getElementById('multiplayer-chat-panel');
@@ -9896,9 +10109,14 @@
             });
             if (packet.type === 'GAME_STATE') {
                 const activePlayer = players[activePlayerIndex];
-                setMultiplayerNotice(activePlayer
-                    ? `Oda bağlı • Sıra ${activePlayer.name} krallığında`
-                    : 'Oda bağlı • Oyun durumu eşitleniyor.', 'emerald');
+                if (multiplayerTradeResultNotice) {
+                    setMultiplayerNotice(multiplayerTradeResultNotice, 'emerald');
+                    multiplayerTradeResultNotice = null;
+                } else {
+                    setMultiplayerNotice(activePlayer
+                        ? `Oda bağlı • Sıra ${activePlayer.name} krallığında`
+                        : 'Oda bağlı • Oyun durumu eşitleniyor.', 'emerald');
+                }
             }
         }
 
@@ -9948,7 +10166,7 @@
                 sessionId: session.sessionId,
                 peerA: session.peerA,
                 peerB: session.peerB,
-                session: type === 'TRADE_SESSION_UPDATE' ? session : null,
+                session: type === 'TRADE_SESSION_UPDATE' ? JSON.parse(JSON.stringify(session)) : null,
                 message
             };
             [session.peerA, session.peerB].forEach(peerId => sendTradeMessageToPeer(peerId, packet));
@@ -9958,17 +10176,19 @@
             if (packet.type === 'TRADE_SESSION_UPDATE') {
                 const session = packet.session;
                 if (!session || (session.peerA !== multiplayerPeerId && session.peerB !== multiplayerPeerId)) return;
-                const isNewSession = !multiplayerTradeNegotiation ||
-                    multiplayerTradeNegotiation.sessionId !== session.sessionId ||
-                    document.getElementById('trade-offer-content').classList.contains('hidden');
+                const previousSession = multiplayerTradeNegotiation;
+                const isNewSession = !previousSession || previousSession.sessionId !== session.sessionId;
+                const stageChanged = previousSession?.status !== session.status;
                 multiplayerTradeNegotiation = session;
                 pendingTradeInviteId = null;
                 if (isNewSession) {
                     resetTradeOfferInputs();
                     document.getElementById('trade-modal').classList.remove('hidden');
-                    renderTradeAssetsLists();
+                    renderTradeSessionStage(session.status !== 'pending_accept');
                     const other = getTradeCounterparty();
                     if (other) setMultiplayerNotice(`${other.name} ile ticaret görüşmesi başladı.`, 'amber');
+                } else if (stageChanged) {
+                    renderTradeSessionStage(session.status !== 'pending_accept');
                 } else {
                     const other = getTradeCounterparty();
                     if (other) renderRemoteTradeOffer(other);
@@ -10003,7 +10223,12 @@
                     multiplayerTradeNegotiation = null;
                     pendingTradeInviteId = null;
                     document.getElementById('trade-modal').classList.add('hidden');
-                    setMultiplayerNotice(packet.message || 'Ticaret görüşmesi sona erdi.', 'emerald');
+                    const resultNotice = packet.message || 'Ticaret görüşmesi sona erdi.';
+                    multiplayerTradeResultNotice = resultNotice;
+                    setMultiplayerNotice(multiplayerTradeResultNotice, 'emerald');
+                    setTimeout(() => {
+                        if (multiplayerTradeResultNotice === resultNotice) multiplayerTradeResultNotice = null;
+                    }, 5000);
                 }
             }
         }
@@ -10031,6 +10256,7 @@
                     sessionId: typeof packet.sessionId === 'string' ? packet.sessionId.slice(0, 128) : '',
                     peerA: authenticatedPeerId,
                     peerB: target.peerId,
+                    status: 'pending_accept',
                     offers: {}
                 };
                 if (!session.sessionId) return;
@@ -10043,13 +10269,27 @@
             if (!session || session.sessionId !== packet.sessionId ||
                 (authenticatedPeerId !== session.peerA && authenticatedPeerId !== session.peerB)) return;
 
+            if (packet.type === 'TRADE_ACCEPT') {
+                if (authenticatedPeerId !== session.peerB || session.status !== 'pending_accept') return;
+                session.status = 'active';
+                publishTradeSession(session);
+                return;
+            }
+
+            if (packet.type === 'TRADE_DECLINE') {
+                if (authenticatedPeerId !== session.peerB || session.status !== 'pending_accept') return;
+                multiplayerTradeNegotiation = null;
+                publishTradeSession(session, 'TRADE_SESSION_FINISHED', 'Ticaret daveti karşı tarafça reddedildi.');
+                return;
+            }
+
             if (packet.type === 'TRADE_CANCEL') {
                 multiplayerTradeNegotiation = null;
                 publishTradeSession(session, 'TRADE_SESSION_FINISHED', 'Ticaret görüşmesi iptal edildi.');
                 return;
             }
 
-            if (packet.type !== 'TRADE_OFFER' || session.offers[authenticatedPeerId]) return;
+            if (packet.type !== 'TRADE_OFFER' || session.status !== 'active' || session.offers[authenticatedPeerId]) return;
             const player = players.find(item => item.peerId === authenticatedPeerId);
             if (!player || !validateTradeOffer(player, packet.offer)) {
                 sendTradeMessageToPeer(authenticatedPeerId, {
@@ -10162,6 +10402,35 @@
             return true;
         }
 
+        function sendMovementDiceRejection(peerId, rollId, connection) {
+            multiplayerDiceRequestPending = false;
+            if (peerId === multiplayerPeerId) return;
+            const packet = {
+                type: 'MOVEMENT_DICE_REJECTED',
+                sender: multiplayerPeerId,
+                toPeerId: peerId,
+                rollId
+            };
+            if (connection && connection.open) connection.send(packet);
+            else if (multiplayerChannel) multiplayerChannel.postMessage(packet);
+        }
+
+        function handleHostMovementDiceRequest(packet, authenticatedPeerId, connection) {
+            const activePlayer = players[activePlayerIndex];
+            const rollId = typeof packet.rollId === 'string' ? packet.rollId.slice(0, 128) : '';
+            if (!rollId || authenticatedPeerId !== packet.peerId ||
+                !multiplayerRoster.some(player => player.peerId === authenticatedPeerId) ||
+                !activePlayer || activePlayer.peerId !== authenticatedPeerId ||
+                gameState !== 'PHASE_3_MOVE' || activePlayer.hasRolledThisTurn ||
+                isRollingDice || activeMultiplayerMovementRollId) {
+                sendMovementDiceRejection(authenticatedPeerId, rollId, connection);
+                return;
+            }
+            const startPacket = createMovementDicePacket(activePlayer, rollId);
+            broadcastMultiplayerPacket(startPacket);
+            playMovementDiceAnimation(startPacket);
+        }
+
         function handleMultiplayerPacket(packet, connection = null) {
             if (!packet || !packet.type || packet.sender === multiplayerPeerId) return;
             if (packet.toPeerId && packet.toPeerId !== multiplayerPeerId) return;
@@ -10170,7 +10439,17 @@
             if (packet.msgId) multiplayerSeenMessages.add(packet.msgId);
 
             if (multiplayerIsHost) {
-                if (packet.type === 'TRADE_INVITE' || packet.type === 'TRADE_OFFER' || packet.type === 'TRADE_CANCEL') {
+                if (packet.type === 'MAP_PREVIEW') return;
+                if (packet.type === 'MOVEMENT_DICE_REQUEST') {
+                    const authenticatedPeerId = connection
+                        ? multiplayerConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    handleHostMovementDiceRequest(packet, authenticatedPeerId, connection);
+                    return;
+                }
+                if (packet.type === 'TRADE_INVITE' || packet.type === 'TRADE_ACCEPT' ||
+                    packet.type === 'TRADE_DECLINE' || packet.type === 'TRADE_OFFER' ||
+                    packet.type === 'TRADE_CANCEL') {
                     const authenticatedPeerId = connection
                         ? multiplayerConnectionPlayers.get(connection.peer)
                         : packet.peerId;
@@ -10197,7 +10476,15 @@
                         multiplayerConnectionPlayers.set(connection.peer, packet.peerId);
                         multiplayerHostConnections.set(connection.peer, connection);
                     }
-                    if (players.length) {
+                    if (gameState === 'PREVIEW' && !players.length) {
+                        const previewPacket = {
+                            type: 'MAP_PREVIEW',
+                            sender: multiplayerPeerId,
+                            preview: captureMultiplayerMapPreview()
+                        };
+                        if (connection) connection.send(previewPacket);
+                        else if (multiplayerChannel) multiplayerChannel.postMessage(previewPacket);
+                    } else if (players.length) {
                         const statePacket = {
                             type: 'GAME_STATE',
                             sender: multiplayerPeerId,
@@ -10257,6 +10544,30 @@
                 return;
             }
 
+            if (packet.type === 'MAP_PREVIEW') {
+                applyMultiplayerMapPreview(packet.preview);
+                return;
+            }
+            if (packet.type === 'INITIATIVE_DICE_START') {
+                if (Array.isArray(packet.rolls) && packet.rolls.length > 0) animateInitiativeRoll(packet, null);
+                return;
+            }
+            if (packet.type === 'MOVEMENT_DICE_START') {
+                const activePlayer = players[activePlayerIndex];
+                if (activePlayer && activePlayer.id === packet.playerId &&
+                    activePlayer.peerId === packet.playerPeerId && !activePlayer.hasRolledThisTurn) {
+                    playMovementDiceAnimation(packet);
+                }
+                return;
+            }
+            if (packet.type === 'MOVEMENT_DICE_REJECTED') {
+                if (packet.rollId && packet.rollId.startsWith(`${multiplayerPeerId}_`)) {
+                    multiplayerDiceRequestPending = false;
+                    setMultiplayerNotice('Zar isteği host tarafından reddedildi. Sırayı ve bağlantıyı kontrol edin.', 'rose');
+                }
+                return;
+            }
+
             if (packet.type === 'CHAT_MESSAGE' || packet.type === 'CHAT_REACTION') {
                 if (multiplayerRoster.some(player => player.peerId === packet.peerId)) {
                     appendMultiplayerChatMessage(
@@ -10294,11 +10605,16 @@
                 multiplayerAwaitingCommit = false;
                 applyMultiplayerSnapshot(packet.snapshot);
                 const activePlayer = players[activePlayerIndex];
-                setMultiplayerNotice(activePlayer
-                    ? (activePlayer.peerId === multiplayerPeerId
-                        ? `Bağlandı • Sıra sende: ${activePlayer.name}`
-                        : `Bağlandı • Sıra ${activePlayer.name} krallığında`)
-                    : 'Çevrimiçi oyuna bağlandı.', 'emerald');
+                if (multiplayerTradeResultNotice) {
+                    setMultiplayerNotice(multiplayerTradeResultNotice, 'emerald');
+                    multiplayerTradeResultNotice = null;
+                } else {
+                    setMultiplayerNotice(activePlayer
+                        ? (activePlayer.peerId === multiplayerPeerId
+                            ? `Bağlandı • Sıra sende: ${activePlayer.name}`
+                            : `Bağlandı • Sıra ${activePlayer.name} krallığında`)
+                        : 'Çevrimiçi oyuna bağlandı.', 'emerald');
+                }
             }
         }
 
@@ -10353,6 +10669,35 @@
             });
         }
 
+        function setMultiplayerSetupAccess() {
+            const isHost = !multiplayerSession || multiplayerIsHost;
+            document.querySelectorAll('#setup-modal input, #setup-modal select, #setup-modal button').forEach(control => {
+                control.disabled = !isHost || (multiplayerSession && control.id === 'setup-player-count');
+            });
+            document.querySelectorAll('#setup-modal a').forEach(link => {
+                link.classList.toggle('hidden', multiplayerSession);
+            });
+            if (multiplayerSession) {
+                multiplayerRoster.forEach((player, index) => {
+                    const nameInput = document.getElementById(`setup-pname-${index}`);
+                    if (!nameInput) return;
+                    nameInput.value = player.name;
+                    nameInput.disabled = true;
+                });
+            }
+            const notice = document.getElementById('multiplayer-setup-notice');
+            if (!multiplayerSession) {
+                notice.classList.add('hidden');
+                return;
+            }
+            notice.textContent = isHost
+                ? 'Oda hazır. Haritayı bu ekranda düzenleyin; hazır olduğunuzda oyunu siz başlatın.'
+                : 'Host haritayı düzenliyor. Bu ekranda harita ayarları ve oyunu başlatma yalnızca host tarafından yapılabilir.';
+            notice.className = `text-xs font-semibold rounded-lg px-3 py-2 mb-3 border ${isHost
+                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+                : 'bg-amber-950/60 border-amber-500/40 text-amber-200'}`;
+        }
+
         function initializeMultiplayerSession() {
             const params = new URLSearchParams(window.location.search);
             multiplayerRoomCode = params.get('room');
@@ -10374,6 +10719,7 @@
                 setMultiplayerNotice('Oda bilgisi geçersiz veya süresi dolmuş.', 'rose');
                 return;
             }
+            setMultiplayerSetupAccess();
             if (typeof Peer === 'undefined') {
                 setMultiplayerNotice('WebRTC kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.', 'rose');
                 return;
@@ -10390,7 +10736,7 @@
                     event.stopImmediatePropagation();
                 } else {
                     multiplayerActionAuthorized = true;
-                    setTimeout(scheduleMultiplayerSync, 0);
+                    if (!isMultiplayerEventTarget(event.target)) setTimeout(scheduleMultiplayerSync, 0);
                 }
             }, true);
             ['mousedown', 'touchstart'].forEach(eventName => {
@@ -10407,22 +10753,21 @@
                     if (isMultiplayerUiTarget(event.target)) return;
                     if (!multiplayerCanAct()) return;
                     multiplayerActionAuthorized = true;
-                    setTimeout(() => {
-                        if (!hasDragged) scheduleMultiplayerSync();
-                    }, 0);
+                    if (!isMultiplayerEventTarget(event.target)) {
+                        setTimeout(() => {
+                            if (!hasDragged) scheduleMultiplayerSync();
+                        }, 0);
+                    }
                 }, true);
             });
 
             if (multiplayerIsHost) {
                 multiplayerPeer = new Peer(`wod-room-${multiplayerRoomCode.toLowerCase()}`);
                 multiplayerPeer.on('open', () => {
-                    setMultiplayerNotice('Oda hazır • Tam oyun başlatılıyor…', 'emerald');
+                    setMultiplayerNotice('Oda hazır • Haritayı düzenleyin ve hazır olduğunuzda başlatın.', 'emerald');
                     document.getElementById('setup-player-count').value = String(Math.max(2, multiplayerRoster.length));
                     onSetupConfigChange(true);
-                    setTimeout(() => {
-                        multiplayerActionAuthorized = true;
-                        initiateDiceOrderScreen();
-                    }, 300);
+                    setMultiplayerSetupAccess();
                 });
                 multiplayerPeer.on('connection', connection => {
                     connection.on('data', data => handleMultiplayerPacket(data, connection));
@@ -10436,7 +10781,7 @@
                     setMultiplayerNotice('Oda bağlantısında hata oluştu.', 'rose');
                 });
             } else {
-                document.getElementById('setup-modal').classList.add('hidden');
+                document.getElementById('setup-modal').classList.remove('hidden');
                 multiplayerPeer = new Peer();
                 multiplayerPeer.on('open', () => {
                     connectMultiplayerClient();
