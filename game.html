@@ -428,7 +428,7 @@
                 <button onclick="initiateDiceOrderScreen()" class="w-full gold-btn text-white font-bold py-3 px-5 rounded-xl text-sm sm:text-base tracking-wide">
                     🎲 Bu Haritayla Oyunu Başlat (Sıra Zarı At)
                 </button>
-                <a href="multiplayer_demo.html" target="_blank" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold bg-indigo-950/90 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 transition shadow-lg">
+                <a href="index.html" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold bg-indigo-950/90 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 transition shadow-lg">
                     🌐 Çevrimiçi Oda Kur ve Tam Oyunu Oyna
                 </a>
             </div>
@@ -816,6 +816,7 @@
         let multiplayerReconnectTimer = null;
         let multiplayerReconnectAttempts = 0;
         let multiplayerConnectionPlayers = new Map();
+        let multiplayerLeavingRoom = false;
         let multiplayerChannel = null;
         let multiplayerVersion = 0;
         let multiplayerSuppressSync = false;
@@ -1532,8 +1533,11 @@
 
         function initiateDiceOrderScreen() {
             if (multiplayerSession && !multiplayerIsHost) return;
+            const activeMultiplayerRoster = multiplayerSession
+                ? multiplayerRoster.filter(player => player.connected !== false)
+                : null;
             const count = multiplayerSession
-                ? multiplayerRoster.length
+                ? activeMultiplayerRoster.length
                 : parseInt(document.getElementById('setup-player-count').value);
             onManualChanceToggleChange();
             lazContractorCardUsedInGame = false;
@@ -1541,7 +1545,7 @@
             for (let i = 0; i < count; i++) {
                 const nameInput = document.getElementById(`setup-pname-${i}`);
                 const pal = PLAYER_PALETTE[i];
-                const onlinePlayer = multiplayerSession ? multiplayerRoster[i] : null;
+                const onlinePlayer = multiplayerSession ? activeMultiplayerRoster[i] : null;
                 players.push({
                     id: i,
                     peerId: onlinePlayer ? onlinePlayer.peerId : null,
@@ -1568,6 +1572,7 @@
                     remainingAP: 0,
                     hasRolledThisTurn: false,
                     eliminated: false,
+                    connected: true,
                     cityKey: null,
                     armies: [],
                     heldCards: [] // Saklanabilir (sonradan kullanılabilir) şans kartları envanteri
@@ -2150,8 +2155,13 @@
             }
 
             if (gameState === 'SETUP_WALLS') {
-                if (activePlayerIndex < players.length - 1) {
-                    activePlayerIndex++;
+                let nextPlayerIndex = activePlayerIndex + 1;
+                while (nextPlayerIndex < players.length &&
+                    (players[nextPlayerIndex].eliminated || players[nextPlayerIndex].connected === false)) {
+                    nextPlayerIndex++;
+                }
+                if (nextPlayerIndex < players.length) {
+                    activePlayerIndex = nextPlayerIndex;
                     gameState = 'SETUP_CITY';
                     const nextP = getActivePlayer();
                     if (nextP) {
@@ -2163,7 +2173,10 @@
                     // Tüm oyuncular Ana Şehirlerini ve 6 duvarını kurdu!
                     // Geriye kalan tüm boş STRONGHOLD_PLOT noktaları artık oyun içi Kale Kurma Noktası olarak işlev görür
                     addLog('🏰 Tüm Ana Şehirler kuruldu! Haritadaki kalan boş Şehir/Kale noktalarına artık **Kale** inşa edilebilir.');
-                    activePlayerIndex = 0;
+                    activePlayerIndex = players.findIndex(player =>
+                        !player.eliminated && player.connected !== false
+                    );
+                    if (activePlayerIndex < 0) return;
                     turnNumber = 1;
                     startPlayerTurn();
                 }
@@ -2323,7 +2336,7 @@
 
         function startPlayerTurn() {
             const p = getActivePlayer();
-            if (p.eliminated) {
+            if (p.eliminated || p.connected === false) {
                 endTurn();
                 return;
             }
@@ -2907,7 +2920,8 @@
                     turnNumber++;
                 }
                 loops++;
-            } while (players[activePlayerIndex].eliminated && loops <= players.length);
+            } while ((players[activePlayerIndex].eliminated ||
+                players[activePlayerIndex].connected === false) && loops <= players.length);
 
             checkVictoryCondition();
             startPlayerTurn();
@@ -9458,14 +9472,140 @@
 
         function leaveMultiplayerRoom() {
             if (multiplayerReconnectTimer) clearTimeout(multiplayerReconnectTimer);
+            if (multiplayerSession) {
+                if (multiplayerIsHost) {
+                    broadcastMultiplayerPacket({ type: 'ROOM_CLOSED', peerId: multiplayerPeerId });
+                } else {
+                    sendMultiplayerPacket({ type: 'GAME_LEAVE', peerId: multiplayerPeerId });
+                }
+            }
+            multiplayerLeavingRoom = true;
+            setTimeout(returnToMainMenu, 150);
+        }
+
+        function returnToMainMenu() {
+            multiplayerLeavingRoom = true;
+            if (multiplayerReconnectTimer) clearTimeout(multiplayerReconnectTimer);
+            if (multiplayerArenaTimer !== null) clearTimeout(multiplayerArenaTimer);
+            if (multiplayerHodriDuelTimer !== null) clearTimeout(multiplayerHodriDuelTimer);
             if (multiplayerChannel) multiplayerChannel.close();
+            if (multiplayerClientConnection) multiplayerClientConnection.close();
+            multiplayerHostConnections.forEach(connection => connection.close());
             if (multiplayerPeer && !multiplayerPeer.destroyed) multiplayerPeer.destroy();
-            sessionStorage.removeItem(`wod_online_roster_${multiplayerRoomCode}`);
-            sessionStorage.removeItem(`wod_online_game_session_${multiplayerRoomCode}`);
-            const destination = new URL(window.location.href);
-            destination.search = '';
-            destination.hash = '';
-            window.location.replace(destination.toString());
+            if (multiplayerRoomCode) {
+                sessionStorage.removeItem(`wod_online_roster_${multiplayerRoomCode}`);
+                sessionStorage.removeItem(`wod_online_game_session_${multiplayerRoomCode}`);
+                if (multiplayerGameSessionId) {
+                    sessionStorage.removeItem(`wod_full_game_state_${multiplayerRoomCode}_${multiplayerGameSessionId}`);
+                }
+            }
+            window.location.replace(new URL('index.html', window.location.href).toString());
+        }
+
+        function handleHostMultiplayerPlayerDeparture(peerId) {
+            if (!multiplayerIsHost) return;
+            const player = players.find(item => item.peerId === peerId);
+            if (!player) {
+                const rosterPlayer = multiplayerRoster.find(item => item.peerId === peerId);
+                if (!rosterPlayer || rosterPlayer.connected === false) return;
+                rosterPlayer.connected = false;
+                setMultiplayerNotice(`${rosterPlayer.name} odadan ayrıldı.`, 'amber');
+                broadcastMultiplayerPacket({ type: 'PLAYER_LEFT', peerId });
+                return;
+            }
+            if (player.connected === false) return;
+            player.connected = false;
+            const rosterPlayer = multiplayerRoster.find(item => item.peerId === peerId);
+            if (rosterPlayer) rosterPlayer.connected = false;
+            const safeName = String(player.name).replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[char]);
+            addLog(`🚪 <b>${safeName}</b> bağlantıyı kesti. Etkin sırası atlanacak.`);
+
+            if (multiplayerArena &&
+                (multiplayerArena.stage !== 'RESULT' || player.id === multiplayerArena.challengerId)) {
+                const arena = multiplayerArena;
+                clearMultiplayerArenaTimer();
+                if (arena.stage !== 'BETTING' && arena.stage !== 'RESULT') {
+                    Object.values(arena.bets).forEach(bet => {
+                        const bettor = players.find(item => item.id === bet.playerId);
+                        if (bettor) bettor[bet.resource] += bet.amount;
+                    });
+                }
+                multiplayerArena = null;
+                multiplayerArenaActionPending = false;
+                multiplayerArenaLocalDraft = null;
+                multiplayerArenaFinishCallback = null;
+                const owner = players.find(item => item.id === arena.challengerId);
+                if (owner?.connected !== false && activeChanceContext?.player?.id === owner.id &&
+                    activeChanceContext.currentCardIndex === arena.cardIndex) {
+                    completeChanceCardInteractive(
+                        owner,
+                        arena.cardIndex,
+                        `Arena sona erdi; ${player.name} odadan ayrıldı. Bahisler iade edildi.`
+                    );
+                }
+            }
+
+            if (multiplayerHodriDuel &&
+                [multiplayerHodriDuel.challengerId, multiplayerHodriDuel.rivalId].includes(player.id) &&
+                (multiplayerHodriDuel.stage !== 'RESULT' ||
+                    player.id === activeChanceContext?.player?.id)) {
+                clearMultiplayerHodriDuelTimer();
+                multiplayerHodriDuel = null;
+                multiplayerHodriDuelActionPending = false;
+                if (activeChanceContext?.player?.connected !== false) {
+                    const owner = activeChanceContext?.player;
+                    if (owner && activeChanceContext.currentCardIndex !== undefined) {
+                        completeChanceCardInteractive(
+                            owner,
+                            activeChanceContext.currentCardIndex,
+                            `Düello sona erdi; ${player.name} odadan ayrıldı.`
+                        );
+                    }
+                }
+            }
+
+            if (multiplayerTradeNegotiation &&
+                [multiplayerTradeNegotiation.peerA, multiplayerTradeNegotiation.peerB].includes(peerId)) {
+                const session = multiplayerTradeNegotiation;
+                multiplayerTradeNegotiation = null;
+                publishTradeSession(
+                    session,
+                    'TRADE_SESSION_FINISHED',
+                    `Ticaret görüşmesi ${player.name} odadan ayrıldığı için sonlandırıldı.`
+                );
+            }
+
+            if (currentCombat &&
+                (currentCombat.attacker.id === player.id || currentCombat.defender.id === player.id)) {
+                currentCombat = null;
+                document.getElementById('combat-modal').classList.add('hidden');
+                subMode = null;
+            }
+            pendingChanceQueue = pendingChanceQueue.filter(item => item.player.id !== player.id);
+            if (activeChanceContext?.player?.id === player.id) {
+                activeChanceContext = null;
+                document.getElementById('chance-modal').classList.add('hidden');
+            }
+
+            if (gameState === 'SETUP_CITY' || gameState === 'SETUP_WALLS') {
+                if (players[activePlayerIndex]?.id === player.id) {
+                    if (gameState === 'SETUP_CITY') gameState = 'SETUP_WALLS';
+                    advanceSetupOrTurn();
+                }
+            } else if (gameState !== 'PREVIEW' && players[activePlayerIndex]?.id === player.id) {
+                endTurn();
+            }
+
+            updateUI();
+            drawMap();
+            multiplayerVersion++;
+            broadcastMultiplayerPacket({
+                type: 'GAME_STATE',
+                version: multiplayerVersion,
+                snapshot: captureMultiplayerSnapshot()
+            });
         }
 
         // =========================================================================
@@ -9563,6 +9703,9 @@
                 }
                 if (pl.ebeleBonusMove > 0) {
                     statusTags.push(`<span class="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/60 text-[9px] text-emerald-200 font-bold" title="Kolaysa Ebele ödülü: +${pl.ebeleBonusMove} hücre hareket hakkı">🎯 +${pl.ebeleBonusMove} Hücre</span>`);
+                }
+                if (multiplayerSession && pl.connected === false) {
+                    statusTags.push('<span class="px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/60 text-[9px] text-rose-200 font-bold">🚪 Bağlantısı kesildi</span>');
                 }
                 const statusRowHtml = statusTags.length > 0
                     ? `<div class="flex items-center gap-1 mt-1 flex-wrap">${statusTags.join('')}</div>`
@@ -11485,13 +11628,14 @@
             const input = document.getElementById('multiplayer-chat-input');
             const text = input.value.trim().slice(0, 240);
             if (!text || !multiplayerSession) return;
-            input.value = '';
-            sendMultiplayerChatPacket({ type: 'CHAT_MESSAGE', text });
+            if (sendMultiplayerChatPacket({ type: 'CHAT_MESSAGE', text })) input.value = '';
         }
 
         function sendMultiplayerQuickReaction(emoji) {
             if (!multiplayerSession) return;
-            sendMultiplayerChatPacket({ type: 'CHAT_REACTION', text: emoji });
+            if (['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) {
+                sendMultiplayerChatPacket({ type: 'CHAT_REACTION', text: emoji });
+            }
         }
 
         function sendMultiplayerChatPacket(packet) {
@@ -11499,8 +11643,14 @@
             if (multiplayerIsHost) {
                 appendMultiplayerChatMessage(multiplayerPeerId, packet.text, packet.type === 'CHAT_REACTION');
                 broadcastMultiplayerPacket(packet);
+                return true;
             } else {
-                sendMultiplayerPacket(packet);
+                if (!sendMultiplayerPacket(packet)) {
+                    setMultiplayerNotice('Sohbet mesajı gönderilemedi; bağlantıyı kontrol edin.', 'rose');
+                    return false;
+                }
+                appendMultiplayerChatMessage(multiplayerPeerId, packet.text, packet.type === 'CHAT_REACTION');
+                return true;
             }
         }
 
@@ -11625,6 +11775,50 @@
                 }).filter(Boolean)
             };
             return JSON.parse(JSON.stringify(snapshot));
+        }
+
+        function multiplayerSnapshotStorageKey() {
+            if (!multiplayerRoomCode || !multiplayerGameSessionId) return null;
+            return `wod_full_game_state_${multiplayerRoomCode}_${multiplayerGameSessionId}`;
+        }
+
+        function persistMultiplayerSnapshot(packet) {
+            const storageKey = multiplayerSnapshotStorageKey();
+            if (!multiplayerIsHost || !storageKey || !Array.isArray(packet.snapshot?.players) ||
+                packet.snapshot.players.length === 0) return;
+            try {
+                sessionStorage.setItem(storageKey, JSON.stringify({
+                    version: packet.version,
+                    snapshot: packet.snapshot
+                }));
+            } catch (error) {
+                console.error('Multiplayer game state could not be saved for reload.', error);
+                setMultiplayerNotice('Oyun durumu yenileme için kaydedilemedi.', 'rose');
+            }
+        }
+
+        function restoreMultiplayerSnapshot() {
+            const storageKey = multiplayerSnapshotStorageKey();
+            if (!multiplayerIsHost || !storageKey) return;
+            let savedState;
+            try {
+                const serializedState = sessionStorage.getItem(storageKey);
+                if (!serializedState) return;
+                savedState = JSON.parse(serializedState);
+            } catch (error) {
+                console.error('Saved multiplayer game state could not be read.', error);
+                setMultiplayerNotice('Kaydedilmiş oyun durumu okunamadı.', 'rose');
+                return;
+            }
+            if (!savedState || !Number.isSafeInteger(savedState.version) || savedState.version < 0 ||
+                !savedState.snapshot || !Array.isArray(savedState.snapshot.players) ||
+                savedState.snapshot.players.length === 0) {
+                setMultiplayerNotice('Kaydedilmiş oyun durumu geçersiz; oyunu yeniden başlatın.', 'rose');
+                return;
+            }
+            multiplayerVersion = savedState.version;
+            applyMultiplayerSnapshot(savedState.snapshot);
+            setMultiplayerNotice('Oyun durumu ve Arena rolünüz geri yüklendi.', 'emerald');
         }
 
         function applyMultiplayerSnapshot(snapshot) {
@@ -11772,9 +11966,13 @@
 
         function broadcastMultiplayerPacket(packet, excludedPeerId = null) {
             packet.sender = multiplayerPeerId;
-            packet.msgId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const isChatPacket = packet.type === 'CHAT_MESSAGE' || packet.type === 'CHAT_REACTION';
+            packet.msgId = isChatPacket && packet.msgId
+                ? packet.msgId
+                : `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             if (excludedPeerId) packet.excludePeerId = excludedPeerId;
             multiplayerSeenMessages.add(packet.msgId);
+            if (packet.type === 'GAME_STATE') persistMultiplayerSnapshot(packet);
             if (multiplayerChannel) multiplayerChannel.postMessage(packet);
             multiplayerHostConnections.forEach(connection => {
                 if (connection.open && multiplayerConnectionPlayers.get(connection.peer) !== excludedPeerId) {
@@ -12200,6 +12398,26 @@
             if (packet.msgId && multiplayerSeenMessages.has(packet.msgId)) return;
             if (packet.msgId) multiplayerSeenMessages.add(packet.msgId);
 
+            if (!multiplayerIsHost && packet.type === 'ROOM_CLOSED') {
+                setMultiplayerNotice('Oda sahibi oyundan ayrıldı; ana menüye dönülüyor.', 'rose');
+                returnToMainMenu();
+                return;
+            }
+            if (!multiplayerIsHost &&
+                (packet.type === 'PLAYER_LEFT' || packet.type === 'PLAYER_REJOINED')) {
+                const rosterPlayer = multiplayerRoster.find(player => player.peerId === packet.peerId);
+                if (rosterPlayer) {
+                    rosterPlayer.connected = packet.type === 'PLAYER_REJOINED';
+                    setMultiplayerNotice(
+                        packet.type === 'PLAYER_LEFT'
+                            ? `${rosterPlayer.name} odadan ayrıldı.`
+                            : `${rosterPlayer.name} yeniden bağlandı.`,
+                        packet.type === 'PLAYER_LEFT' ? 'amber' : 'emerald'
+                    );
+                }
+                return;
+            }
+
             if (multiplayerIsHost) {
                 if (packet.type === 'MAP_PREVIEW') return;
                 if (packet.type === 'MULTIPLAYER_ACTION_EVENT') {
@@ -12223,6 +12441,21 @@
                         ? multiplayerConnectionPlayers.get(connection.peer)
                         : packet.peerId;
                     handleHostMultiplayerArenaAction(packet, authenticatedPeerId);
+                    return;
+                }
+                if (packet.type === 'GAME_LEAVE') {
+                    const authenticatedPeerId = connection
+                        ? multiplayerConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    if (authenticatedPeerId && authenticatedPeerId === packet.peerId &&
+                        multiplayerRoster.some(player => player.peerId === authenticatedPeerId)) {
+                        handleHostMultiplayerPlayerDeparture(authenticatedPeerId);
+                    }
+                    return;
+                }
+                if (packet.type === 'PLAYER_LEFT' || packet.type === 'PLAYER_REJOINED') {
+                    const rosterPlayer = multiplayerRoster.find(player => player.peerId === packet.peerId);
+                    if (rosterPlayer) rosterPlayer.connected = packet.type === 'PLAYER_REJOINED';
                     return;
                 }
                 if (packet.type === 'HODRI_DUEL_ACTION') {
@@ -12250,7 +12483,12 @@
                         !multiplayerRoster.some(player => player.peerId === authenticatedPeerId)) return;
                     const text = String(packet.text || '').trim().slice(0, 240);
                     if (!text) return;
-                    const chatPacket = { type: packet.type, peerId: authenticatedPeerId, text };
+                    const chatPacket = {
+                        type: packet.type,
+                        peerId: authenticatedPeerId,
+                        text,
+                        msgId: packet.msgId
+                    };
                     appendMultiplayerChatMessage(authenticatedPeerId, text, packet.type === 'CHAT_REACTION');
                     broadcastMultiplayerPacket(chatPacket);
                     return;
@@ -12261,6 +12499,25 @@
                     if (connection) {
                         multiplayerConnectionPlayers.set(connection.peer, packet.peerId);
                         multiplayerHostConnections.set(connection.peer, connection);
+                    }
+                    const gamePlayer = players.find(player => player.peerId === packet.peerId);
+                    if (gamePlayer?.connected === false) {
+                        gamePlayer.connected = true;
+                        const rejoinedPlayer = multiplayerRoster.find(player => player.peerId === packet.peerId);
+                        if (rejoinedPlayer) rejoinedPlayer.connected = true;
+                        addLog(`🔌 <b>${gamePlayer.name}</b> yeniden oyuna bağlandı.`);
+                        multiplayerVersion++;
+                        broadcastMultiplayerPacket({
+                            type: 'GAME_STATE',
+                            version: multiplayerVersion,
+                            snapshot: captureMultiplayerSnapshot()
+                        });
+                    } else {
+                        const rejoinedPlayer = multiplayerRoster.find(player => player.peerId === packet.peerId);
+                        if (rejoinedPlayer?.connected === false) {
+                            rejoinedPlayer.connected = true;
+                            broadcastMultiplayerPacket({ type: 'PLAYER_REJOINED', peerId: packet.peerId });
+                        }
                     }
                     if (gameState === 'PREVIEW' && !players.length) {
                         const previewPacket = {
@@ -12430,7 +12687,7 @@
             if (multiplayerClientConnection && multiplayerClientConnection.open) return;
             multiplayerReconnectAttempts++;
             if (multiplayerReconnectAttempts > 30) {
-                setMultiplayerNotice('Odaya bağlanılamadı. Bağlantıyı kontrol edip sayfayı yenileyin.', 'rose');
+                setMultiplayerNotice('Oda sahibi bağlantıyı kapattı veya erişilemiyor.', 'rose');
                 return;
             }
 
@@ -12592,12 +12849,20 @@
                     document.getElementById('setup-player-count').value = String(Math.max(2, multiplayerRoster.length));
                     onSetupConfigChange(true);
                     setMultiplayerSetupAccess();
+                    restoreMultiplayerSnapshot();
                 });
                 multiplayerPeer.on('connection', connection => {
                     connection.on('data', data => handleMultiplayerPacket(data, connection));
                     connection.on('close', () => {
+                        const peerId = multiplayerConnectionPlayers.get(connection.peer);
                         multiplayerHostConnections.delete(connection.peer);
                         multiplayerConnectionPlayers.delete(connection.peer);
+                        const stillConnected = Array.from(multiplayerConnectionPlayers.entries()).some(([connectionPeer, mappedPeerId]) =>
+                            mappedPeerId === peerId && multiplayerHostConnections.get(connectionPeer)?.open
+                        );
+                        if (!multiplayerLeavingRoom && peerId && !stillConnected) {
+                            handleHostMultiplayerPlayerDeparture(peerId);
+                        }
                     });
                 });
                 multiplayerPeer.on('error', error => {

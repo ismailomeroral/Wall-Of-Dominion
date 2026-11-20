@@ -100,7 +100,7 @@
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-amber-400 font-medieval mt-1">WALLS OF DOMINION • ONLINE LOBİ</h1>
                     <p class="text-xs text-slate-400">Oda kurup kodu arkadaşlarınla paylaş; lobi hazır olduğunda ana oyunun tüm kurallarıyla çevrimiçi başla.</p>
                 </div>
-                <a href="walls_of_dominion_prototype.html" class="self-start sm:self-center px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-amber-300 font-semibold transition">
+                <a href="game.html" class="self-start sm:self-center px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-amber-300 font-semibold transition">
                     ⬅️ Ana Oyuna Dön
                 </a>
             </div>
@@ -117,7 +117,7 @@
                         </div>
                         <div>
                             <label class="block text-xs text-slate-300 mb-1.5">Krallık Sancağı Rengi:</label>
-                            <div id="color-picker-row" class="flex items-center gap-2.5"></div>
+                            <div id="color-picker-row" class="flex flex-wrap items-center gap-2.5"></div>
                         </div>
                     </div>
 
@@ -219,7 +219,7 @@
                             <button onclick="sendQuickReaction('😂')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">😂</button>
                         </div>
                         <form onsubmit="submitChatMessage(event, 'lobby-chat-input')" class="flex gap-1.5">
-                            <input id="lobby-chat-input" type="text" placeholder="Mesaj yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                            <input id="lobby-chat-input" type="text" maxlength="240" placeholder="Mesaj yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
                             <button type="submit" class="px-3 py-1.5 gold-btn rounded-lg text-xs font-bold text-white">Gönder</button>
                         </form>
                     </div>
@@ -288,7 +288,7 @@
                     <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1.5">📜 Canlı Senkron Günlüğü & Sohbet</div>
                     <div id="game-log-box" class="flex-1 overflow-y-auto space-y-1 text-[11px] text-slate-300 pr-1 mb-2"></div>
                     <form onsubmit="submitChatMessage(event, 'game-chat-input')" class="flex gap-1">
-                        <input id="game-chat-input" type="text" placeholder="Sohbete yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none">
+                        <input id="game-chat-input" type="text" maxlength="240" placeholder="Sohbete yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none">
                         <button type="submit" class="px-2.5 py-1 gold-btn rounded-lg text-xs font-bold text-white">➤</button>
                     </form>
                 </div>
@@ -370,7 +370,11 @@
             { name: 'Zümrüt Muhafız', hex: '#10b981' },
             { name: 'Altın Güneş', hex: '#f59e0b' },
             { name: 'Ametist Gölge', hex: '#a855f7' },
-            { name: 'Turkuaz Fırtına', hex: '#06b6d4' }
+            { name: 'Turkuaz Fırtına', hex: '#06b6d4' },
+            { name: 'Gümüş Kurt', hex: '#94a3b8' },
+            { name: 'Pembe Şafak', hex: '#ec4899' },
+            { name: 'Kehribar Ejderha', hex: '#f97316' },
+            { name: 'Obsidyen Gece', hex: '#64748b' }
         ];
 
         let myPeerId = 'p_' + Math.random().toString(36).substring(2, 9);
@@ -380,9 +384,11 @@
         let isHost = false;
         let hasEnteredPlayingScreen = false;
         let currentRenderedSeed = null;
+        let isLeavingRoom = false;
 
         let peerInstance = null;
         let hostConnections = new Map(); // peerId -> DataConnection (Sadece Host tutar)
+        let hostConnectionPlayers = new Map();
         let clientToHostConn = null;     // DataConnection (Sadece Client tutar)
         let localBroadcastChannel = null;
         let joinRetryInterval = null;
@@ -619,6 +625,12 @@
                     });
                     conn.on('close', () => {
                         hostConnections.delete(conn.peer);
+                        const peerId = hostConnectionPlayers.get(conn.peer);
+                        hostConnectionPlayers.delete(conn.peer);
+                        if (!isLeavingRoom && peerId &&
+                            !Array.from(hostConnectionPlayers.values()).includes(peerId)) {
+                            removeLobbyPlayer(peerId);
+                        }
                     });
                 });
 
@@ -656,6 +668,14 @@
                     conn.on('data', (data) => {
                         handleIncomingNetworkPacket(data);
                     });
+                    conn.on('close', () => {
+                        if (isLeavingRoom || !currentRoomCode) return;
+                        setNetStatus('Oda bağlantısı kesildi; ana menüye dönülüyor.', 'rose');
+                        const cleanUrl = new URL(window.location.href);
+                        cleanUrl.search = '';
+                        cleanUrl.hash = '';
+                        setTimeout(() => window.location.replace(cleanUrl.href), 1000);
+                    });
                 });
             } catch (e) {
                 console.warn('PeerJS client fallback:', e);
@@ -664,14 +684,24 @@
 
         // Paket Gönderme Yardımcıları (BroadcastChannel + localStorage + WebRTC PeerJS)
         function emitOverLocalChannels(packet) {
+            let sent = false;
             if (localBroadcastChannel) {
-                try { localBroadcastChannel.postMessage(packet); } catch (e) {}
+                try {
+                    localBroadcastChannel.postMessage(packet);
+                    sent = true;
+                } catch (error) {
+                    console.error('Local room packet could not be broadcast.', error);
+                }
             }
             if (currentRoomCode) {
                 try {
                     localStorage.setItem(`wod_net_pkt_${currentRoomCode}`, JSON.stringify(packet));
-                } catch (e) {}
+                    sent = true;
+                } catch (error) {
+                    console.error('Room packet could not be stored for local delivery.', error);
+                }
             }
+            return sent;
         }
 
         function broadcastPacketFromHost(packet) {
@@ -690,19 +720,25 @@
             packet.msgId = packet.msgId || ('m_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now());
             if (isHost) {
                 handleIncomingNetworkPacket(packet);
-                return;
+                return true;
             }
             processedMsgIds.add(packet.msgId);
-            emitOverLocalChannels(packet);
+            let sent = emitOverLocalChannels(packet);
             if (clientToHostConn && clientToHostConn.open) {
-                try { clientToHostConn.send(packet); } catch (e) {}
+                try {
+                    clientToHostConn.send(packet);
+                    sent = true;
+                } catch (error) {
+                    console.error('Room host packet could not be sent.', error);
+                }
             }
+            return sent;
         }
 
         // =========================================================================
         // 3. AĞ PAKETLERİNİ İŞLEME (HOST OTORİTESİ & SENKRONİZASYON)
         // =========================================================================
-        function handleIncomingNetworkPacket(packet) {
+        function handleIncomingNetworkPacket(packet, connection = null) {
             if (!packet || !packet.type) return;
             if (packet.msgId && processedMsgIds.has(packet.msgId)) return;
             if (packet.msgId) processedMsgIds.add(packet.msgId);
@@ -711,6 +747,8 @@
             if (isHost) {
                 if (packet.type === 'JOIN_REQUEST') {
                     const pInfo = packet.player;
+                    if (!pInfo || typeof pInfo.peerId !== 'string') return;
+                    if (connection) hostConnectionPlayers.set(connection.peer, pInfo.peerId);
                     let existing = roomState.players.find(x => x.peerId === pInfo.peerId);
                     if (!existing && roomState.players.length < 6) {
                         const usedColors = roomState.players.map(x => x.color);
@@ -741,6 +779,19 @@
                     return;
                 }
 
+                if (packet.type === 'LEAVE_REQUEST') {
+                    const authenticatedPeerId = connection
+                        ? hostConnectionPlayers.get(connection.peer)
+                        : packet.peerId;
+                    if (authenticatedPeerId && authenticatedPeerId === packet.peerId) {
+                        removeLobbyPlayer(authenticatedPeerId);
+                        if (connection) hostConnectionPlayers.delete(connection.peer);
+                    }
+                    return;
+                }
+
+                if (packet.type === 'ROOM_CLOSED') return;
+
                 if (packet.type === 'SET_READY') {
                     const pl = roomState.players.find(x => x.peerId === packet.peerId);
                     if (pl) {
@@ -756,14 +807,27 @@
                 }
 
                 if (packet.type === 'CHAT_MSG') {
-                    appendLog(`💬 <b>${packet.sender}:</b> ${packet.text}`);
-                    broadcastPacketFromHost(packet);
+                    const sender = roomState.players.find(player => player.peerId === packet.peerId);
+                    const text = String(packet.text || '').trim().slice(0, 240);
+                    if (!sender || !text) return;
+                    const chatPacket = {
+                        ...packet,
+                        peerId: sender.peerId,
+                        sender: sender.name,
+                        text
+                    };
+                    appendChatMessage(sender.name, text);
+                    broadcastPacketFromHost(chatPacket);
                     return;
                 }
 
                 if (packet.type === 'QUICK_REACTION') {
-                    spawnFloatingReaction(packet.emoji, packet.sender);
-                    broadcastPacketFromHost(packet);
+                    const sender = roomState.players.find(player => player.peerId === packet.peerId);
+                    const emoji = String(packet.emoji || '');
+                    if (!sender || !['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
+                    const reactionPacket = { ...packet, peerId: sender.peerId, sender: sender.name, emoji };
+                    spawnFloatingReaction(emoji, sender.name);
+                    broadcastPacketFromHost(reactionPacket);
                     return;
                 }
 
@@ -923,14 +987,27 @@
                 setNetStatus(`🌐 Senkronize (#${currentRoomCode})`, 'emerald');
                 applyRoomStateUpdate(packet.state);
             }
+            else if (packet.type === 'ROOM_CLOSED') {
+                setNetStatus('Oda sahibi odayı kapattı.', 'rose');
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.search = '';
+                cleanUrl.hash = '';
+                setTimeout(() => window.location.replace(cleanUrl.href), 150);
+            }
             else if (packet.type === 'SYSTEM_LOG') {
                 appendLog(packet.html);
             }
             else if (packet.type === 'CHAT_MSG') {
-                appendLog(`💬 <b>${packet.sender}:</b> ${packet.text}`);
+                const sender = roomState.players.find(player => player.peerId === packet.peerId);
+                const text = String(packet.text || '').trim().slice(0, 240);
+                if (sender && text) appendChatMessage(sender.name, text);
             }
             else if (packet.type === 'QUICK_REACTION') {
-                spawnFloatingReaction(packet.emoji, packet.sender);
+                const sender = roomState.players.find(player => player.peerId === packet.peerId);
+                const emoji = String(packet.emoji || '');
+                if (sender && ['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) {
+                    spawnFloatingReaction(emoji, sender.name);
+                }
             }
             else if (packet.type === 'EVENT_DICE_ROLLED') {
                 playSynchronizedDiceAnimation(packet.playerName, packet.rolled, () => {
@@ -1076,10 +1153,40 @@
         }
 
         function leaveRoom() {
-            if (joinRetryInterval) clearInterval(joinRetryInterval);
+            isLeavingRoom = true;
+            if (isHost) {
+                broadcastPacketFromHost({
+                    type: 'ROOM_CLOSED',
+                    peerId: myPeerId
+                });
+            } else if (currentRoomCode) {
+                sendPacketToHost({
+                    type: 'LEAVE_REQUEST',
+                    peerId: myPeerId
+                });
+            }
             const cleanUrl = new URL(window.location.href);
             cleanUrl.search = '';
-            window.location.href = cleanUrl.href;
+            cleanUrl.hash = '';
+            setTimeout(() => {
+                if (joinRetryInterval) clearInterval(joinRetryInterval);
+                if (localBroadcastChannel) localBroadcastChannel.close();
+                if (clientToHostConn) clientToHostConn.close();
+                if (peerInstance && !peerInstance.destroyed) peerInstance.destroy();
+                window.location.replace(cleanUrl.href);
+            }, 150);
+        }
+
+        function removeLobbyPlayer(peerId) {
+            const playerIndex = roomState.players.findIndex(player => player.peerId === peerId);
+            if (playerIndex < 0 || roomState.players[playerIndex].isHost) return;
+            const [player] = roomState.players.splice(playerIndex, 1);
+            if (playerIndex < roomState.activePlayerIndex) roomState.activePlayerIndex--;
+            if (roomState.activePlayerIndex >= roomState.players.length) roomState.activePlayerIndex = 0;
+            const logHtml = `🚪 <b>${escapeHTML(player.name)}</b> odadan ayrıldı.`;
+            appendLog(logHtml);
+            broadcastPacketFromHost({ type: 'SYSTEM_LOG', html: logHtml });
+            syncRoomStateToAll();
         }
 
         function hostStartMultiplayerGame() {
@@ -1102,7 +1209,7 @@
                 setNetStatus('Oda bilgisi aktarılamadı', 'rose');
                 return;
             }
-            const gameUrl = new URL('walls_of_dominion_prototype.html', window.location.href);
+            const gameUrl = new URL('game.html', window.location.href);
             gameUrl.search = '';
             gameUrl.searchParams.set('room', currentRoomCode);
             gameUrl.searchParams.set('peer', myPeerId);
@@ -1391,34 +1498,49 @@
         function submitChatMessage(e, inputId) {
             e.preventDefault();
             const input = document.getElementById(inputId);
-            const text = input.value.trim();
+            const text = input.value.trim().slice(0, 240);
             if (!text) return;
-            input.value = '';
-            sendPacketToHost({
+            const sent = sendPacketToHost({
                 type: 'CHAT_MSG',
-                sender: myName,
+                peerId: myPeerId,
                 text
             });
+            if (!sent) {
+                setNetStatus('Sohbet mesajı gönderilemedi; bağlantıyı kontrol edin.', 'rose');
+                return;
+            }
+            input.value = '';
+            if (!isHost) appendChatMessage(myName, text);
         }
 
         function sendQuickReaction(emoji) {
-            sendPacketToHost({
+            if (!['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
+            const sent = sendPacketToHost({
                 type: 'QUICK_REACTION',
-                sender: myName,
+                peerId: myPeerId,
                 emoji
             });
+            if (!sent) {
+                setNetStatus('Tepki gönderilemedi; bağlantıyı kontrol edin.', 'rose');
+                return;
+            }
+            if (!isHost) spawnFloatingReaction(emoji, myName);
         }
 
         function spawnFloatingReaction(emoji, senderName) {
+            if (!['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
             const layer = document.getElementById('reactions-layer');
             const el = document.createElement('div');
             const leftPct = 25 + Math.random() * 50;
             el.className = 'floating-reaction absolute bottom-20 flex flex-col items-center';
             el.style.left = `${leftPct}%`;
-            el.innerHTML = `
-                <span class="text-4xl drop-shadow-lg">${emoji}</span>
-                <span class="px-2 py-0.5 rounded-full bg-slate-900/90 border border-amber-400/50 text-[10px] font-bold text-amber-300">${senderName}</span>
-            `;
+            const icon = document.createElement('span');
+            icon.className = 'text-4xl drop-shadow-lg';
+            icon.textContent = emoji;
+            const label = document.createElement('span');
+            label.className = 'px-2 py-0.5 rounded-full bg-slate-900/90 border border-amber-400/50 text-[10px] font-bold text-amber-300';
+            label.textContent = senderName;
+            el.append(icon, label);
             layer.appendChild(el);
             setTimeout(() => el.remove(), 2200);
         }
@@ -1507,6 +1629,31 @@
                 div.className = 'border-b border-slate-800/80 pb-1 leading-snug';
                 div.innerHTML = html;
                 box.prepend(div);
+            });
+        }
+
+        function escapeHTML(value) {
+            return String(value).replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[char]);
+        }
+
+        function appendChatMessage(sender, text) {
+            ['lobby-chat-box', 'game-log-box'].forEach(id => {
+                const box = document.getElementById(id);
+                if (!box) return;
+                const row = document.createElement('div');
+                row.className = 'border-b border-slate-800/80 pb-1 leading-snug';
+                const name = document.createElement('b');
+                name.textContent = `💬 ${sender}: `;
+                const message = document.createElement('span');
+                message.textContent = text;
+                row.append(name, message);
+                box.prepend(row);
             });
         }
 
