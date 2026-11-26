@@ -131,6 +131,43 @@
             100% { transform: rotate(720deg) scale(1); }
         }
         .arena-die-rolling { animation: arenaDieRoll 1.05s ease-out both; }
+        @keyframes resourceGainPop {
+            0% { transform: scale(1); filter: brightness(1); }
+            35% { transform: scale(1.22); filter: brightness(1.45); box-shadow: 0 0 18px rgba(251, 191, 36, 0.8); }
+            100% { transform: scale(1); filter: brightness(1); }
+        }
+        .resource-gain-pop { animation: resourceGainPop 0.75s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        @keyframes resourceDeltaFloat {
+            0% { opacity: 0; transform: translate(-50%, 6px) scale(0.75); }
+            18% { opacity: 1; transform: translate(-50%, -8px) scale(1.15); }
+            75% { opacity: 1; transform: translate(-50%, -26px) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -42px) scale(0.92); }
+        }
+        .resource-delta-float {
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            margin-top: 8px;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 60;
+            animation: resourceDeltaFloat 1.85s ease-out forwards;
+        }
+        @keyframes turnToastPop {
+            0% { opacity: 0; transform: translate(-50%, -14px) scale(0.9); }
+            16% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
+            80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -10px) scale(0.96); }
+        }
+        .turn-toast-anim { animation: turnToastPop 2.2s ease-out forwards; }
+        @keyframes diceReadyPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.65), 0 4px 16px rgba(245, 158, 11, 0.55); transform: scale(1); }
+            50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0), 0 8px 24px rgba(245, 158, 11, 0.85); transform: scale(1.04); }
+        }
+        .dice-ready-pulse { animation: diceReadyPulse 1.5s infinite ease-in-out; }
+        .my-turn-vignette {
+            box-shadow: inset 0 0 38px rgba(16, 185, 129, 0.24), inset 0 0 0 2px rgba(251, 191, 36, 0.45);
+        }
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
@@ -145,14 +182,29 @@
         <canvas id="gameCanvas"></canvas>
     </div>
 
+    <!-- SIRA SENDE EKRAN KENAR PARLAMASI VE GEÇİŞ UYARISI -->
+    <div id="my-turn-vignette" class="hidden fixed inset-0 z-10 pointer-events-none my-turn-vignette transition-opacity duration-300"></div>
+    <div id="turn-toast-banner" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+        <div class="glass-panel rounded-2xl px-7 py-3 border-2 border-emerald-400 shadow-2xl flex items-center gap-3">
+            <span id="turn-toast-dot" class="w-4 h-4 rounded-full ring-2 ring-white animate-ping"></span>
+            <div class="text-center">
+                <div id="turn-toast-sub" class="text-[10px] font-bold uppercase tracking-widest text-emerald-300">HAMLE SIRASI</div>
+                <div id="turn-toast-title" class="text-lg sm:text-xl font-extrabold text-amber-300 font-medieval tracking-wide">⚔️ SIRA SENDE!</div>
+            </div>
+        </div>
+    </div>
+
     <!-- ÜST DURUM ÇUBUĞU (HUD) -->
     <div id="top-hud" class="hidden absolute top-0 left-0 right-0 z-20 p-2 sm:p-3 pointer-events-none flex flex-wrap items-center justify-between gap-2">
         <!-- Sol: Aktif Oyuncu & Kaynaklar -->
-        <div class="glass-panel rounded-xl px-4 py-2.5 pointer-events-auto flex flex-wrap items-center gap-4">
+        <div id="hud-left-panel" class="glass-panel rounded-xl px-4 py-2.5 pointer-events-auto flex flex-wrap items-center gap-3.5 transition-all duration-300">
             <div class="flex items-center gap-2.5">
                 <div id="hud-player-dot" class="w-4 h-4 rounded-full ring-2 ring-white shadow"></div>
                 <div>
-                    <div class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold" id="hud-turn-badge">TUR 1</div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold" id="hud-turn-badge">TUR 1</span>
+                        <span id="hud-turn-status-pill" class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/20 border border-emerald-400/60 text-emerald-300">● SIRA SENDE</span>
+                    </div>
                     <div class="text-sm sm:text-base font-bold text-white leading-tight" id="hud-player-name">Oyuncu 1</div>
                 </div>
             </div>
@@ -160,25 +212,25 @@
             <div class="h-7 w-px bg-slate-700 hidden sm:block"></div>
 
             <!-- Kaynaklar -->
-            <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold">
-                <div class="flex items-center gap-1.5 bg-amber-950/60 border border-amber-500/40 px-2.5 py-1 rounded-lg" title="Altın (Gelir ve Satın Alma)">
+            <div class="flex items-center gap-2.5 text-xs sm:text-sm font-semibold">
+                <div id="res-pill-gold" class="relative flex items-center gap-1.5 bg-amber-950/75 border border-amber-400/50 px-2.5 py-1 rounded-lg transition-all" title="Altın (Gelir ve Satın Alma)">
                     <span class="text-amber-400">🪙</span>
-                    <span id="res-gold" class="text-amber-200">8</span>
-                    <span id="inc-gold" class="text-[10px] text-amber-400/80">(+2)</span>
+                    <span id="res-gold" class="text-amber-100 font-extrabold">8</span>
+                    <span id="inc-gold" class="text-[11px] font-bold text-amber-300">(+2)</span>
                 </div>
-                <div class="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded-lg" title="Odun (Duvar, Bina ve Ordu)">
+                <div id="res-pill-wood" class="relative flex items-center gap-1.5 bg-emerald-950/75 border border-emerald-400/50 px-2.5 py-1 rounded-lg transition-all" title="Odun (Duvar, Bina ve Ordu)">
                     <span class="text-emerald-400">🪵</span>
-                    <span id="res-wood" class="text-emerald-200">3</span>
-                    <span id="inc-wood" class="text-[10px] text-emerald-400/80">(+0)</span>
+                    <span id="res-wood" class="text-emerald-100 font-extrabold">3</span>
+                    <span id="inc-wood" class="text-[11px] font-bold text-emerald-300">(+0)</span>
                 </div>
-                <div class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-400/40 px-2.5 py-1 rounded-lg" title="Demir (Bina ve Ordu)">
+                <div id="res-pill-iron" class="relative flex items-center gap-1.5 bg-sky-950/75 border border-sky-400/50 px-2.5 py-1 rounded-lg transition-all" title="Demir (Bina ve Ordu)">
                     <span class="text-sky-300">⛏️</span>
-                    <span id="res-iron" class="text-slate-200">1</span>
-                    <span id="inc-iron" class="text-[10px] text-sky-300/80">(+0)</span>
+                    <span id="res-iron" class="text-sky-100 font-extrabold">1</span>
+                    <span id="inc-iron" class="text-[11px] font-bold text-sky-300">(+0)</span>
                 </div>
-                <div class="flex items-center gap-1.5 bg-indigo-950/60 border border-indigo-400/40 px-2.5 py-1 rounded-lg" title="Ordular (Maksimum 3)">
+                <div id="res-pill-armies" class="relative flex items-center gap-1.5 bg-indigo-950/70 border border-indigo-400/50 px-2.5 py-1 rounded-lg transition-all" title="Ordular (Maksimum 3)">
                     <span>⚔️</span>
-                    <span id="res-armies" class="text-indigo-200">1/3</span>
+                    <span id="res-armies" class="text-indigo-200 font-bold">1/3</span>
                 </div>
             </div>
         </div>
@@ -190,14 +242,14 @@
                 <span class="text-slate-600">→</span>
                 <span id="phase-step-2" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400">2. Duvar</span>
                 <span class="text-slate-600">→</span>
-                <span id="phase-step-3" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400">3. Hareket</span>
+                <span id="phase-step-3" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400">3. Zar & Hareket</span>
                 <span class="text-slate-600">→</span>
                 <span id="phase-step-4" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400">4. Eylem</span>
             </div>
         </div>
 
         <!-- Sağ: Tur/Süre Sayacı ve Yardımcı Butonlar -->
-        <div class="glass-panel rounded-xl p-1.5 pointer-events-auto flex items-center gap-1.5">
+        <div id="hud-camera-controls" class="glass-panel rounded-xl p-1.5 pointer-events-auto flex items-center gap-1.5">
             <div class="flex items-center gap-2 bg-slate-900/90 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs font-bold">
                 <span class="text-amber-400" id="corner-turn-counter" title="Aktif Tur">🔄 TUR 1</span>
                 <span class="text-slate-600">|</span>
@@ -250,7 +302,7 @@
     <div id="left-sidebar" class="hidden absolute top-16 left-2.5 z-20 w-56 sm:w-64 pointer-events-none flex flex-col gap-2 max-h-[calc(100vh-140px)]">
         <!-- Oyuncu Sıralaması Penceresi -->
         <div class="glass-panel rounded-xl p-2.5 pointer-events-auto transition-all duration-200">
-            <button onclick="toggleWindowPanel('players-window-body', 'players-win-icon')" class="w-full text-xs font-bold uppercase tracking-wider text-amber-400 flex justify-between items-center hover:text-amber-300">
+            <button onclick="toggleWindowPanel('players-window-body', 'players-win-icon')" class="window-toggle-btn w-full text-xs font-bold uppercase tracking-wider text-amber-400 flex justify-between items-center hover:text-amber-300">
                 <span class="flex items-center gap-1.5">👑 Krallıklar</span>
                 <span id="players-win-icon" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] leading-none">−</span>
             </button>
@@ -261,7 +313,7 @@
 
         <!-- Oyun Günlüğü Penceresi -->
         <div class="glass-panel rounded-xl p-2.5 pointer-events-auto flex flex-col transition-all duration-200">
-            <button onclick="toggleWindowPanel('log-window-body', 'log-win-icon')" class="w-full text-xs font-bold uppercase tracking-wider text-amber-400 flex justify-between items-center hover:text-amber-300">
+            <button onclick="toggleWindowPanel('log-window-body', 'log-win-icon')" class="window-toggle-btn w-full text-xs font-bold uppercase tracking-wider text-amber-400 flex justify-between items-center hover:text-amber-300">
                 <span class="flex items-center gap-1.5">📜 Oyun Günlüğü</span>
                 <span id="log-win-icon" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] leading-none">−</span>
             </button>
@@ -273,7 +325,7 @@
 
     <!-- ALT EYLEM PANELİ (KOMPAKT & DARALTILMIŞ AKSİYON KONTROLLERİ) -->
     <div id="bottom-action-bar" class="hidden absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 w-[96%] max-w-3xl pointer-events-none">
-        <div class="glass-panel rounded-xl px-3 py-2 pointer-events-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div id="bottom-action-bar-card" class="glass-panel rounded-xl px-3.5 py-2.5 pointer-events-auto flex flex-col sm:flex-row items-center justify-between gap-2 transition-all duration-300">
             <!-- Durum & Yönerge (Kompakt) -->
             <div class="flex-1 min-w-0 text-center sm:text-left">
                 <div id="action-title" class="text-xs sm:text-sm font-bold text-amber-400 truncate">Kurulum Aşaması</div>
@@ -286,19 +338,38 @@
     </div>
 
     <!-- HÜCRE BİLGİ KUTUSU (TOOLTIP) -->
-    <div id="hex-tooltip" class="hidden fixed bottom-24 right-4 z-20 glass-panel rounded-xl p-3 pointer-events-none max-w-xs text-xs">
+    <div id="hex-tooltip" class="hidden fixed bottom-24 right-4 z-20 glass-panel rounded-xl p-3 pointer-events-none max-w-xs sm:max-w-sm text-xs border border-amber-400/40 shadow-2xl">
         <div class="font-bold text-amber-400 text-sm" id="tt-title">Çayır</div>
         <div class="text-slate-300 mt-0.5" id="tt-desc">Hareket Bedeli: 1 AP</div>
-        <div class="text-amber-200/90 mt-1 font-medium" id="tt-extra"></div>
+        <div class="text-amber-200/95 mt-1.5 space-y-1 font-medium leading-snug" id="tt-extra"></div>
     </div>
 
     <!-- TUR BAŞI GELİR ANİMASYON BANNERI -->
     <div id="income-banner" class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-all duration-300">
-        <div class="glass-panel rounded-2xl px-6 py-4 border-2 border-amber-400 shadow-2xl text-center min-w-[290px]">
-            <div class="text-[11px] font-bold uppercase tracking-widest text-amber-300" id="inc-banner-sub">TUR BAŞI GELİR TOPLAMA</div>
-            <div class="text-xl font-bold text-white font-medieval mt-0.5" id="inc-banner-player">Krallık</div>
-            <div class="flex items-center justify-center gap-4 mt-2.5 text-base font-extrabold" id="inc-banner-items"></div>
-            <div class="text-[11px] text-emerald-300 mt-1.5 font-semibold" id="inc-banner-bonus"></div>
+        <div class="glass-panel rounded-2xl px-7 py-5 border-2 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.35)] text-center min-w-[320px]">
+            <div class="text-[11px] font-extrabold uppercase tracking-widest text-amber-300" id="inc-banner-sub">TUR BAŞI GELİR TOPLANDI</div>
+            <div class="text-2xl font-extrabold text-white font-medieval mt-0.5" id="inc-banner-player">Krallık</div>
+            <div class="flex flex-wrap items-center justify-center gap-2.5 mt-3 text-base sm:text-lg font-extrabold" id="inc-banner-items"></div>
+            <div class="text-xs text-emerald-300 mt-2 font-bold" id="inc-banner-bonus"></div>
+        </div>
+    </div>
+
+    <!-- HAREKET ETMEDEN GEÇME ONAY MODALI -->
+    <div id="confirm-skip-move-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="glass-panel rounded-2xl p-6 max-w-md w-full border-2 border-amber-400/70 text-center space-y-4 shadow-2xl">
+            <div class="text-4xl">⚠️🏃</div>
+            <h3 class="text-lg font-bold text-amber-400 font-medieval">Henüz Hiç Hareket Etmedin!</h3>
+            <p id="confirm-skip-move-desc" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                Zar atarak hareket puanı kazandın ancak hiçbir ordunu ilerletmedin. Hareket etmeden Eylem aşamasına geçmek istediğine emin misin?
+            </p>
+            <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+                <button type="button" onclick="cancelSkipMoveConfirm()" class="flex-1 gold-btn text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-lg">
+                    🏃 Geri Dön & Hareket Et
+                </button>
+                <button type="button" onclick="confirmSkipMoveAndProceed()" class="flex-1 bg-slate-800 hover:bg-rose-900/80 border border-slate-600 hover:border-rose-400 text-slate-200 font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm transition">
+                    ⏭️ Evet, Hareket Etmeden Geç
+                </button>
+            </div>
         </div>
     </div>
 
@@ -494,7 +565,7 @@
                     🔀 Karıştır
                 </button>
                 <button id="combat-draw-btn" onclick="drawCombatCards()" class="hidden bg-amber-700 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-amber-400">
-                    🂠 Kart Çektir
+                    🃏 Kart Çektir
                 </button>
                 <button id="combat-opportunity-btn" onclick="redrawAfterOpportunity()" class="hidden gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-sm">
                     ✨ Fırsat Kartı: Tekrar Kart Çek!
@@ -553,7 +624,7 @@
             </div>
 
             <!-- Seçilen Kartın Sonuç ve Etkileşim Görünümü -->
-            <div id="chance-result-view" class="hidden text-center py-3">
+            <div id="chance-result-view" class="hidden flex-1 overflow-y-auto pr-1 text-center py-3">
                 <div class="flex items-center justify-center gap-2 mb-2">
                     <span id="chance-card-badge" class="inline-block px-3 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">OLUMLU OLAY</span>
                     <span id="chance-card-hold-badge" class="inline-block px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">⚡ ANLIK KART</span>
@@ -701,7 +772,7 @@
                         <li>🏰 <b>Kale:</b> 15 Altın, 8 Odun, 6 Demir → <i>+3A/Tur (Güvenli: +6A)</i></li>
                         <li>⛏️ <b>Maden Ocağı:</b> 10A, 4O, 1D → <i>+1D/Tur (Yağma: +3 Demir [3 Turluk])</i></li>
                         <li>🪵 <b>Oduncu Kulübesi:</b> 6A, 1O, 3D → <i>+1O/Tur (Yağma: +3 Odun [3 Turluk])</i></li>
-                        <li>⚔️ <b>Yeni Ordu Eğitimi:</b> 6 Altın, 4 Odun, 4 Demir (Maks 3 Ordu)</li>
+                        <li>⚔️ <b>Yeni Ordu Eğitimi:</b> 10 Altın, 6 Odun, 6 Demir (Maks 3 Ordu)</li>
                         <li>🧱 <b>Yeni Duvar:</b> 2 Altın, 2 Odun | ↔️ <b>Duvar Kaydırma:</b> 1 Altın</li>
                     </ul>
                 </div>
@@ -757,6 +828,11 @@
             'Maden': { gold: 10, wood: 4, iron: 1, income: '+1 Demir/Tur' },
             'Oduncu': { gold: 6, wood: 1, iron: 3, income: '+1 Odun/Tur' }
         };
+        const BASE_ARMY_COST = { gold: 10, wood: 6, iron: 6 };
+        let lastHudResources = null;
+        let lastTurnAnnouncedKey = null;
+        let lastTurnIncomeEvent = null;
+        let lastShownIncomeEventKey = null;
 
         // Sivri üstlü (pointy-top) altıgenin 6 komşu yönü (dir 0..5)
         // dir 0: Doğu (+1,0), dir 1: Kuzeydoğu (+1,-1), dir 2: Kuzeybatı (0,-1),
@@ -799,6 +875,7 @@
         let multiplayerIsHost = false;
         let multiplayerPreviewSyncTimer = null;
         let multiplayerTradeResultNotice = null;
+        let multiplayerHostTradeSession = null;
         let multiplayerTradeNegotiation = null;
         let multiplayerTradeOfferPendingSessionId = null;
         let multiplayerTradeOfferPendingTimer = null;
@@ -902,6 +979,9 @@
         // =========================================================================
         let audioCtx = null;
         let soundMuted = false;
+        let combatMusicTimer = null;
+        let combatMusicStep = 0;
+        let combatMusicActive = false;
 
         function getAudioCtx() {
             if (soundMuted) return null;
@@ -915,6 +995,183 @@
             return audioCtx;
         }
 
+        function startCombatMusic() {
+            combatMusicActive = true;
+            if (soundMuted || combatMusicTimer) return;
+            combatMusicStep = 0;
+            // D minör / Dorik hafif ortaçağ savaş gerilimi melodisi ve yumuşak savaş davulu
+            const melodyNotes = [
+                293.66, 0, 440.00, 349.23, 392.00, 0, 329.63, 293.66,
+                261.63, 0, 392.00, 329.63, 349.23, 329.63, 293.66, 220.00
+            ];
+            const bassDrone = [146.83, 0, 0, 0, 146.83, 0, 0, 0, 130.81, 0, 0, 0, 110.00, 0, 130.81, 0];
+            const drumSteps = new Set([0, 4, 6, 8, 12, 14]);
+            const playStep = () => {
+                if (soundMuted || !combatMusicActive) {
+                    stopCombatMusic(false);
+                    return;
+                }
+                const s = combatMusicStep % melodyNotes.length;
+                const mel = melodyNotes[s];
+                const bass = bassDrone[s];
+                if (mel > 0) {
+                    playTone(mel, 'triangle', 0.24, 0, 0.032);
+                    playTone(mel * 0.5, 'sine', 0.22, 0.01, 0.014);
+                }
+                if (bass > 0) {
+                    playTone(bass, 'sine', 0.72, 0, 0.028);
+                }
+                if (drumSteps.has(s)) {
+                    const accent = (s === 0 || s === 8);
+                    playTone(accent ? 72 : 58, 'triangle', 0.14, 0, accent ? 0.055 : 0.035, 34);
+                    playNoiseBurst(0.05, 0, accent ? 0.028 : 0.016, 360);
+                }
+                combatMusicStep = (combatMusicStep + 1) % melodyNotes.length;
+            };
+            playStep();
+            combatMusicTimer = setInterval(playStep, 265);
+        }
+
+        function stopCombatMusic(clearIntent = true) {
+            if (clearIntent) combatMusicActive = false;
+            if (combatMusicTimer) {
+                clearInterval(combatMusicTimer);
+                combatMusicTimer = null;
+            }
+        }
+
+        function syncCombatMusicPlayback() {
+            const combatModalOpen = !document.getElementById('combat-modal')?.classList.contains('hidden');
+            const arenaCardPhase = !!(multiplayerArena && ['CARDS_DEFENDER', 'CARDS_PICK', 'CARDS_REVEAL'].includes(multiplayerArena.stage));
+            if ((currentCombat && combatModalOpen) || arenaCardPhase) {
+                startCombatMusic();
+            } else {
+                stopCombatMusic();
+            }
+        }
+
+        // Kartlara ve taraflara (Saldıran / Savunan / İzleyici) özel savaş kartı ses efektleri
+        function playCombatCardSFX(cardId, attackerPeerId = null, defenderPeerId = null, broadcast = true, savedPeerId = null) {
+            if (broadcast && multiplayerSession) {
+                publishMultiplayerActionEvent('COMBAT_CARD_SFX', {
+                    cardId,
+                    attackerPeerId: attackerPeerId || null,
+                    defenderPeerId: defenderPeerId || null,
+                    savedPeerId: savedPeerId || null
+                });
+            }
+            if (soundMuted) return;
+
+            let role = 'attacker';
+            if (multiplayerSession) {
+                if (savedPeerId && multiplayerPeerId === savedPeerId) role = 'saved';
+                else if (savedPeerId && (multiplayerPeerId === attackerPeerId || multiplayerPeerId === defenderPeerId)) role = 'opponent';
+                else if (attackerPeerId && multiplayerPeerId === attackerPeerId) role = 'attacker';
+                else if (defenderPeerId && multiplayerPeerId === defenderPeerId) role = 'defender';
+                else role = 'spectator';
+            } else if (cardId === 'LIFESAVER_USED') {
+                role = 'saved';
+            }
+
+            if (cardId === 'KILL_DEFENDER') {
+                if (role === 'defender') {
+                    // Savunan için: Kalkan kırılması ve hüzünlü yenilgi borazanı
+                    playNoiseBurst(0.24, 0, 0.24, 1400);
+                    playTone(293.66, 'sawtooth', 0.18, 0, 0.15, 220);
+                    playTone(261.63, 'sawtooth', 0.20, 0.16, 0.15, 196);
+                    playTone(233.08, 'sawtooth', 0.36, 0.34, 0.16, 130);
+                } else if (role === 'attacker') {
+                    // Saldıran için: Keskin kılıç darbesi ve zafer fanfarı
+                    playNoiseBurst(0.14, 0, 0.22, 2800);
+                    playTone(293.66, 'triangle', 0.14, 0, 0.15);
+                    playTone(369.99, 'triangle', 0.14, 0.10, 0.16);
+                    playTone(440.00, 'triangle', 0.18, 0.20, 0.17);
+                    playTone(587.33, 'triangle', 0.36, 0.30, 0.20);
+                } else {
+                    playNoiseBurst(0.18, 0, 0.18, 2200);
+                    playTone(329.63, 'sawtooth', 0.18, 0, 0.13);
+                    playTone(440.00, 'triangle', 0.28, 0.14, 0.14);
+                }
+            } else if (cardId === 'KILL_ATTACKER') {
+                if (role === 'defender') {
+                    // Savunan için: Başarılı karşı savunma zaferi fanfarı
+                    playNoiseBurst(0.14, 0, 0.18, 2400);
+                    playTone(329.63, 'triangle', 0.14, 0, 0.15);
+                    playTone(415.30, 'triangle', 0.14, 0.10, 0.16);
+                    playTone(493.88, 'triangle', 0.18, 0.20, 0.17);
+                    playTone(659.25, 'triangle', 0.36, 0.30, 0.19);
+                } else if (role === 'attacker') {
+                    // Saldıran için: Pusu darbesi ve düşüş çanı
+                    playNoiseBurst(0.26, 0, 0.24, 900);
+                    playTone(220.00, 'sawtooth', 0.20, 0, 0.16, 165);
+                    playTone(174.61, 'sawtooth', 0.22, 0.18, 0.16, 130);
+                    playTone(146.83, 'sawtooth', 0.38, 0.36, 0.18, 82);
+                } else {
+                    playNoiseBurst(0.22, 0, 0.18, 1000);
+                    playTone(196.00, 'sawtooth', 0.24, 0, 0.14, 110);
+                }
+            } else if (cardId === 'REPEL_ATTACKER') {
+                if (role === 'defender') {
+                    // Savunan için: Güçlü demir kalkan blokajı + güven verici çınlama
+                    playNoiseBurst(0.12, 0, 0.22, 2600);
+                    playTone(520, 'square', 0.08, 0, 0.12, 680);
+                    playTone(392.00, 'triangle', 0.16, 0.08, 0.15);
+                    playTone(587.33, 'triangle', 0.24, 0.18, 0.16);
+                } else if (role === 'attacker') {
+                    // Saldıran için: Kalkana çarpma ve geri savrulma sesi
+                    playNoiseBurst(0.16, 0, 0.22, 2200);
+                    playTone(460, 'sawtooth', 0.24, 0.04, 0.15, 135);
+                    playTone(190, 'triangle', 0.22, 0.16, 0.14, 110);
+                } else {
+                    playNoiseBurst(0.14, 0, 0.18, 2300);
+                    playTone(380, 'triangle', 0.18, 0.04, 0.13, 180);
+                }
+            } else if (cardId === 'DRAW_1' || cardId === 'DRAW_2') {
+                // Berabere: Karşılıklı kılıç çarpışması ve dengeli beşli akor
+                playNoiseBurst(0.10, 0, 0.18, 3200);
+                playTone(587.33, 'sine', 0.12, 0, 0.13, 520);
+                playTone(293.66, 'triangle', 0.26, 0.08, 0.13);
+                playTone(440.00, 'triangle', 0.26, 0.14, 0.13);
+            } else if (cardId === 'OPPORTUNITY') {
+                if (role === 'defender') {
+                    // Savunan için: Gerilimli uyarı akoru
+                    playTone(329.63, 'sine', 0.16, 0, 0.12);
+                    playTone(349.23, 'sawtooth', 0.26, 0.10, 0.12, 293.66);
+                } else {
+                    // Saldıran / İzleyici için: Parlak fırsat arp arpeji
+                    [523.25, 659.25, 783.99, 987.77, 1046.5].forEach((f, idx) => {
+                        playTone(f, 'sine', 0.20, idx * 0.06, 0.14);
+                    });
+                }
+            } else if (cardId === 'RAVAGE') {
+                if (role === 'defender') {
+                    // Savunan için: Yangın çatırtısı + yağma alarmı
+                    playNoiseBurst(0.32, 0, 0.24, 700);
+                    playTone(311.13, 'sawtooth', 0.18, 0.06, 0.14, 246.94);
+                    playTone(233.08, 'sawtooth', 0.30, 0.22, 0.15, 146.83);
+                } else {
+                    // Saldıran için: Alev darbesi + ganimet altın şıkırtısı
+                    playNoiseBurst(0.24, 0, 0.20, 850);
+                    playTone(392.00, 'triangle', 0.14, 0.08, 0.14);
+                    playTone(587.33, 'sine', 0.16, 0.18, 0.15);
+                    playTone(880.00, 'sine', 0.22, 0.26, 0.15);
+                }
+            } else if (cardId === 'LIFESAVER_USED') {
+                if (role === 'opponent') {
+                    // Karşı taraf için: Kalkan tarafından engellenme sesi
+                    playTone(580, 'triangle', 0.14, 0, 0.14, 260);
+                    playTone(220, 'sine', 0.22, 0.12, 0.12, 165);
+                } else {
+                    // Kurtulan oyuncu için: Koruyucu kutsal kalkan akoru
+                    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, idx) => {
+                        playTone(f, 'triangle', 0.28, idx * 0.065, 0.15);
+                    });
+                }
+            } else {
+                playSFX('card_flip', false);
+            }
+        }
+
         function toggleSoundMute() {
             soundMuted = !soundMuted;
             const btn = document.getElementById('sound-toggle-btn');
@@ -924,7 +1181,12 @@
                     ? 'px-2 py-1 bg-slate-900 hover:bg-slate-800 rounded-lg text-xs text-slate-400 font-semibold'
                     : 'px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs text-amber-300 font-semibold';
             }
-            if (!soundMuted) playSFX('click');
+            if (soundMuted) {
+                stopCombatMusic(false);
+            } else {
+                playSFX('click', false);
+                syncCombatMusicPlayback();
+            }
         }
 
         // Yan pencereleri (Krallıklar ve Oyun Günlüğü) küçültüp büyütür
@@ -1009,7 +1271,8 @@
 
         function playSFX(effect, broadcast = true) {
             if (broadcast && multiplayerSession &&
-                players[activePlayerIndex]?.peerId === multiplayerPeerId &&
+                (players[activePlayerIndex]?.peerId === multiplayerPeerId ||
+                    (currentCombat && (currentCombat.attacker?.peerId === multiplayerPeerId || currentCombat.defender?.peerId === multiplayerPeerId))) &&
                 multiplayerSfxEffects.has(effect)) {
                 publishMultiplayerActionEvent('SFX', { effect });
             }
@@ -1112,6 +1375,11 @@
                     break;
                 case 'click': // Genel buton / onay sesi
                     playTone(520, 'sine', 0.06, 0, 0.10, 660);
+                    break;
+                case 'turn_start': // Sıra sana geçtiğinde sıcak bildirim borazanı
+                    playTone(392.00, 'triangle', 0.14, 0, 0.14);
+                    playTone(493.88, 'triangle', 0.14, 0.09, 0.14);
+                    playTone(587.33, 'triangle', 0.28, 0.18, 0.16);
                     break;
             }
         }
@@ -1521,6 +1789,11 @@
         }
 
         function openSetupScreen() {
+            stopCombatMusic();
+            lastHudResources = null;
+            lastTurnAnnouncedKey = null;
+            lastTurnIncomeEvent = null;
+            lastShownIncomeEventKey = null;
             gameState = 'PREVIEW';
             document.getElementById('victory-modal').classList.add('hidden');
             document.getElementById('top-hud').classList.add('hidden');
@@ -2069,49 +2342,115 @@
         }
 
         // Binalardan ekranın ortasındaki afişe uçan kaynak simgeleri animasyonu
-        function playTurnIncomeAnimation(player, inc) {
-            playSFX('income');
+        let incomeBannerTimer = null;
+        function playTurnIncomeAnimation(player, inc, turnNumOverride = null) {
+            playSFX('income', false);
             const banner = document.getElementById('income-banner');
-            document.getElementById('inc-banner-sub').textContent = `TUR ${turnNumber} • GELİR TOPLANDI`;
+            const activeTurn = turnNumOverride || turnNumber;
+            document.getElementById('inc-banner-sub').textContent = `TUR ${activeTurn} • GELİR TOPLANDI`;
             document.getElementById('inc-banner-player').textContent = player.name;
             document.getElementById('inc-banner-player').style.color = player.color;
 
+            const makeChip = (icon, amount, label, activeClasses) => {
+                const isGain = amount > 0;
+                return `<span class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${isGain ? activeClasses + ' shadow-lg scale-105' : 'bg-slate-900/60 border-slate-700/60 text-slate-500 text-sm'}">
+                    <span>${icon}</span>
+                    <span>+${amount} ${label}</span>
+                </span>`;
+            };
+
             document.getElementById('inc-banner-items').innerHTML = `
-                <span class="text-amber-300 flex items-center gap-1">🪙 +${inc.gold} Altın</span>
-                <span class="text-emerald-300 flex items-center gap-1">🪵 +${inc.wood} Odun</span>
-                <span class="text-sky-300 flex items-center gap-1">⛏️ +${inc.iron} Demir</span>
+                ${makeChip('🪙', inc.gold, 'Altın', 'bg-amber-950/90 border-amber-400 text-amber-200')}
+                ${makeChip('🪵', inc.wood, 'Odun', 'bg-emerald-950/90 border-emerald-400 text-emerald-200')}
+                ${makeChip('⛏️', inc.iron, 'Demir', 'bg-sky-950/90 border-sky-400 text-sky-200')}
             `;
             document.getElementById('inc-banner-bonus').textContent = inc.safeBonusCount > 0
                 ? `🛡️ ${inc.safeBonusCount} Binada "Güvenli Bölge (2x Gelir)" Bonusu Aktif!`
-                : '';
+                : '💡 İpucu: Binalarını duvarla tamamen çevirerek 2x Güvenli Bölge geliri alabilirsin!';
 
             banner.classList.remove('hidden');
 
             // Haritadaki her gelir kaynağından ekranın üst-orta noktasına uçan parçacıklar oluştur
             const targetScreenX = canvas.width / 2;
-            const targetScreenY = 135;
+            const targetScreenY = 140;
 
-            inc.sources.forEach((src, idx) => {
-                const worldPos = hexToPixel(src.hex.q, src.hex.r);
+            (inc.sources || []).forEach((src, idx) => {
+                const q = src.hex ? src.hex.q : src.q;
+                const r = src.hex ? src.hex.r : src.r;
+                const worldPos = hexToPixel(q, r);
                 const startScreenX = canvas.width / 2 + camera.x + worldPos.x * camera.zoom;
                 const startScreenY = canvas.height / 2 + camera.y + worldPos.y * camera.zoom;
 
                 flyingParticles.push({
                     startX: startScreenX,
                     startY: startScreenY,
-                    targetX: targetScreenX + (idx - (inc.sources.length - 1) / 2) * 35,
+                    targetX: targetScreenX + (idx - (inc.sources.length - 1) / 2) * 42,
                     targetY: targetScreenY,
                     icon: src.icon,
                     label: src.text,
                     color: src.color,
                     progress: 0,
-                    speed: 0.022 + Math.random() * 0.008
+                    speed: 0.017 + Math.random() * 0.006
                 });
             });
 
-            setTimeout(() => {
+            if (incomeBannerTimer) clearTimeout(incomeBannerTimer);
+            incomeBannerTimer = setTimeout(() => {
                 banner.classList.add('hidden');
-            }, 2400);
+                incomeBannerTimer = null;
+            }, 3200);
+        }
+
+        function triggerHudResourceDelta(resKey, delta) {
+            if (!delta) return;
+            const pill = document.getElementById(`res-pill-${resKey}`);
+            if (!pill) return;
+            const meta = {
+                gold: { icon: '🪙', gainCls: 'bg-amber-950/95 border-amber-300 text-amber-200', lossCls: 'bg-rose-950/95 border-rose-400 text-rose-200' },
+                wood: { icon: '🪵', gainCls: 'bg-emerald-950/95 border-emerald-300 text-emerald-200', lossCls: 'bg-rose-950/95 border-rose-400 text-rose-200' },
+                iron: { icon: '⛏️', gainCls: 'bg-sky-950/95 border-sky-300 text-sky-200', lossCls: 'bg-rose-950/95 border-rose-400 text-rose-200' }
+            }[resKey];
+            if (!meta) return;
+
+            if (delta > 0) {
+                pill.classList.remove('resource-gain-pop');
+                void pill.offsetWidth;
+                pill.classList.add('resource-gain-pop');
+            }
+
+            const badge = document.createElement('div');
+            badge.className = `resource-delta-float px-2.5 py-0.5 rounded-full border-2 text-xs font-extrabold shadow-xl ${delta > 0 ? meta.gainCls : meta.lossCls}`;
+            badge.textContent = `${delta > 0 ? '+' : ''}${delta} ${meta.icon}`;
+            pill.appendChild(badge);
+            setTimeout(() => badge.remove(), 1900);
+        }
+
+        let turnToastTimer = null;
+        function showTurnToastBanner(player, isLocalTurn) {
+            const toast = document.getElementById('turn-toast-banner');
+            if (!toast || !player) return;
+            const dot = document.getElementById('turn-toast-dot');
+            const sub = document.getElementById('turn-toast-sub');
+            const title = document.getElementById('turn-toast-title');
+            if (dot) dot.style.backgroundColor = player.color;
+            if (sub) {
+                sub.textContent = gameState.startsWith('SETUP')
+                    ? `KURULUM • ${player.name.toUpperCase()}`
+                    : `TUR ${turnNumber} • ${player.name.toUpperCase()}`;
+            }
+            if (title) {
+                title.textContent = isLocalTurn ? '⚔️ SIRA SENDE!' : `⏳ SIRA: ${player.name}`;
+            }
+            toast.classList.remove('hidden', 'turn-toast-anim');
+            void toast.offsetWidth;
+            toast.classList.add('turn-toast-anim');
+            if (isLocalTurn) playSFX('turn_start', false);
+            if (turnToastTimer) clearTimeout(turnToastTimer);
+            turnToastTimer = setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.remove('turn-toast-anim');
+                turnToastTimer = null;
+            }, 2250);
         }
 
         // Tur tekrar 1. oyuncuya döndüğünde Şans hücreleri %30'un altına düştüyse yenilerini oluşturur
@@ -2465,6 +2804,23 @@
             if (turnNumber > 1) {
                 const safeNote = inc.safeBonusCount > 0 ? ` (🛡️${inc.safeBonusCount} Güvenli Bölge 2x)` : '';
                 addLog(`🚩 <b>SIRA GEÇTİ: ${p.name}</b> (Tur ${turnNumber}) gelirini topladı: +${inc.gold}A, +${inc.wood}O, +${inc.iron}D${safeNote}`);
+                lastTurnIncomeEvent = {
+                    key: `${turnNumber}:${p.id}:${Date.now()}`,
+                    playerId: p.id,
+                    turnNumber,
+                    gold: inc.gold,
+                    wood: inc.wood,
+                    iron: inc.iron,
+                    safeBonusCount: inc.safeBonusCount,
+                    sources: inc.sources.map(src => ({
+                        q: src.hex.q,
+                        r: src.hex.r,
+                        icon: src.icon,
+                        text: src.text,
+                        color: src.color
+                    }))
+                };
+                lastShownIncomeEventKey = lastTurnIncomeEvent.key;
                 playTurnIncomeAnimation(p, inc);
             } else {
                 addLog(`🚩 <b>SIRA GEÇTİ: ${p.name}</b> (Tur 1 — İlk tur hiçbir krallık kaynak geliri kazanmaz).`);
@@ -2833,10 +3189,37 @@
 
         // AŞAMA 3 -> AŞAMA 4 KİLİDİ: "Hareketi Onayla / Tamamla"
         // Bu butona basıldığında kalan AP sıfırlanır, bir daha hareket edilemez ve hücre eylemleri (Şans, İnşa, Yağma, Savaş) açılır!
-        function completeMovementPhase() {
+        function cancelSkipMoveConfirm() {
+            playSFX('click', false);
+            document.getElementById('confirm-skip-move-modal')?.classList.add('hidden');
+        }
+
+        function confirmSkipMoveAndProceed() {
+            document.getElementById('confirm-skip-move-modal')?.classList.add('hidden');
+            completeMovementPhase(true);
+            if (multiplayerSession && multiplayerCanAct()) {
+                multiplayerActionAuthorized = true;
+                scheduleMultiplayerSync();
+            }
+        }
+
+        function completeMovementPhase(forceSkip = false) {
             const p = getActivePlayer();
             if (gameState !== 'PHASE_3_MOVE' || !p.hasRolledThisTurn || isPawnAnimating) return;
 
+            const hasAnyMovableArmy = p.armies.some(a => a.frozenTurns === 0);
+            const hasMovedAny = !p.moveStartSnapshot || p.remainingAP < p.moveStartSnapshot.ap;
+            if (!forceSkip && hasAnyMovableArmy && !hasMovedAny && p.remainingAP > 0) {
+                playSFX('error', false);
+                const descEl = document.getElementById('confirm-skip-move-desc');
+                if (descEl) {
+                    descEl.innerHTML = `Zar atarak <b class="text-amber-300">${p.remainingAP} AP</b> hareket puanı kazandın ancak henüz hiçbir ordunu ilerletmedin.<br><br>Hareket etmeden <b>Eylem aşamasına</b> geçmek istediğine emin misin?`;
+                }
+                document.getElementById('confirm-skip-move-modal')?.classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('confirm-skip-move-modal')?.classList.add('hidden');
             playSFX('click');
             p.remainingAP = 0;
             p.moveStartSnapshot = null;
@@ -3037,9 +3420,9 @@
         function getEffectiveArmyCost(player) {
             const hasHalfCard = !!(player && player.heldCards && player.heldCards.some(c => c.id === 'pos_18_half_cost_army'));
             return {
-                gold: hasHalfCard ? 3 : 6,
-                wood: hasHalfCard ? 2 : 4,
-                iron: hasHalfCard ? 2 : 4,
+                gold: hasHalfCard ? Math.floor(BASE_ARMY_COST.gold / 2) : BASE_ARMY_COST.gold,
+                wood: hasHalfCard ? Math.floor(BASE_ARMY_COST.wood / 2) : BASE_ARMY_COST.wood,
+                iron: hasHalfCard ? Math.floor(BASE_ARMY_COST.iron / 2) : BASE_ARMY_COST.iron,
                 discounted: hasHalfCard,
                 cardId: 'pos_18_half_cost_army'
             };
@@ -3273,6 +3656,7 @@
             renderCombatCardsGrid();
             updateCombatRoleControls();
             modal.classList.remove('hidden');
+            startCombatMusic();
         }
 
         function getCombatControllerPlayer() {
@@ -3474,7 +3858,6 @@
 
         function finalizeCombatCardSelection(idx) {
             if (!currentCombat || !canControlCombat()) return;
-            playSFX('card_flip');
             currentCombat.phase = 'REVEALED';
             currentCombat.pickedIdx = idx;
             const card = currentCombat.deck[idx];
@@ -3492,6 +3875,8 @@
                 lsStage.classList.add('hidden');
                 lsStage.innerHTML = '';
             }
+
+            playCombatCardSFX(card.id, currentCombat.attacker?.peerId, currentCombat.defender?.peerId, true);
 
             if (card.id === 'OPPORTUNITY') {
                 document.getElementById('combat-opportunity-btn').classList.remove('hidden');
@@ -3550,7 +3935,7 @@
             const stage = document.getElementById('combat-lifesaver-stage');
             currentCombat.lifesaverResolved = true;
             if (useCard) {
-                playSFX('victory');
+                playCombatCardSFX('LIFESAVER_USED', currentCombat.attacker?.peerId, currentCombat.defender?.peerId, true, endangeredPlayer.peerId);
                 const cardIndex = endangeredPlayer.heldCards.findIndex(held => held.id === 'pos_50_lifesaver_combat_shield');
                 if (cardIndex !== -1) endangeredPlayer.heldCards.splice(cardIndex, 1);
                 stage.innerHTML = `<div class="text-xs font-bold text-emerald-300">🛡️✨ ${endangeredPlayer.name} [Hayat kurtaran] kartını kullandı ve bu savaştan sağ kurtuldu!</div>`;
@@ -3598,7 +3983,6 @@
             const attArmy = attacker.armies[armyIndex];
 
             if (card.id === 'KILL_DEFENDER') {
-                playSFX('combat_win');
                 if (targetType === 'WALL_EDGE') {
                     walls.delete(targetObj.key);
                     addLog(`💥 <b>${attacker.name}</b>, ${defender.name} krallığının kenar duvarını yıktı!`);
@@ -3630,7 +4014,6 @@
                 }
             }
             else if (card.id === 'KILL_ATTACKER') {
-                playSFX('combat_lose');
                 if (attArmy) {
                     if (attacker.armies.length <= 1) {
                         const cHex = grid.get(attacker.cityKey);
@@ -3648,7 +4031,6 @@
                 }
             }
             else if (card.id === 'REPEL_ATTACKER') {
-                playSFX('combat_lose');
                 if (attArmy) {
                     attArmy.q = attArmy.lastQ ?? attArmy.q;
                     attArmy.r = attArmy.lastR ?? attArmy.r;
@@ -3658,7 +4040,6 @@
                 }
             }
             else if (card.id === 'RAVAGE') {
-                playSFX('loot');
                 if (targetType === 'WALL_EDGE') {
                     targetObj.passableTurns = 1;
                     addLog(`🔥 <b>${defender.name}</b> duvarı harap edildi! 1 turluğuna içinden geçilebilir.`);
@@ -3671,7 +4052,7 @@
                     const stolenGold = Math.min(defender.gold, 2);
                     defender.gold -= stolenGold;
                     attacker.gold += stolenGold;
-                    addLog(`🔥 <b>${defender.name}</b> binası harap edildi! ${stolenGold} Altın غanimet alındı ve 1 tur gelir üretmeyecek.`);
+                    addLog(`🔥 <b>${defender.name}</b> binası harap edildi! ${stolenGold} Altın ganimet alındı ve 1 tur gelir üretmeyecek.`);
                 }
             }
             else {
@@ -3683,6 +4064,7 @@
         }
 
         function closeCombatModal() {
+            stopCombatMusic();
             document.getElementById('combat-modal').classList.add('hidden');
             currentCombat = null;
             endTurn();
@@ -4266,7 +4648,7 @@
                                 <span>Mevcut Ordu: <b class="text-indigo-300">${player.armies.length}/3 ⚔️</b></span>
                             </div>
                             <div class="text-[11px] text-emerald-300 font-semibold">
-                                Normal Maliyet: <span class="line-through text-slate-400">3🪵 3⛏️</span> → Gönüllü Fırsatı: <b>10 🪙 Altın</b>
+                                Normal Maliyet: <span class="line-through text-slate-400">${BASE_ARMY_COST.gold}🪙 ${BASE_ARMY_COST.wood}🪵 ${BASE_ARMY_COST.iron}⛏️</span> → Gönüllü Fırsatı: <b>10 🪙 Altın</b>
                             </div>
                             ${warnMsg ? `<div class="text-[11px] text-rose-400 font-semibold pt-1">${warnMsg}</div>` : ''}
                         </div>
@@ -4686,19 +5068,22 @@
                 holdable: true,
                 icon: '⚔️',
                 title: '18. Komutan tanıdık çıktı (Ordu %50 İndirim)',
-                desc: 'Yeni Ordu kurma maliyeti yarıya düştü! (Normal: 6A, 4O, 4D → İndirimli: 3 Altın, 2 Odun, 2 Demir). Saklanabilir ve sonraki kuracağın orduda otomatik olarak kullanılır.',
+                desc: 'Yeni Ordu kurma maliyeti yarıya düştü! (Normal: 10A, 6O, 6D → İndirimli: 5 Altın, 3 Odun, 3 Demir). Saklanabilir ve sonraki kuracağın orduda otomatik olarak kullanılır.',
                 renderInteractive: (player, armyIndex, finishCallback) => {
                     const stage = document.getElementById('chance-interactive-stage');
-                    const canTrainNow = player.armies.length < 3 && player.gold >= 3 && player.wood >= 2 && player.iron >= 2;
+                    const halfG = Math.floor(BASE_ARMY_COST.gold / 2);
+                    const halfW = Math.floor(BASE_ARMY_COST.wood / 2);
+                    const halfI = Math.floor(BASE_ARMY_COST.iron / 2);
+                    const canTrainNow = player.armies.length < 3 && player.gold >= halfG && player.wood >= halfW && player.iron >= halfI;
                     stage.innerHTML = `
                         <div class="bg-slate-900/85 border border-indigo-500/40 rounded-xl p-3 mb-3 text-xs text-slate-200 space-y-1">
-                            <div>Normal Ordu Maliyeti: <span class="line-through text-slate-400">6🪙 Altın, 4🪵 Odun, 4⛏️ Demir</span></div>
-                            <div class="text-emerald-300 font-bold">🏷️ %50 İndirimli Maliyet: 3🪙 Altın, 2🪵 Odun, 2⛏️ Demir</div>
+                            <div>Normal Ordu Maliyeti: <span class="line-through text-slate-400">${BASE_ARMY_COST.gold}🪙 Altın, ${BASE_ARMY_COST.wood}🪵 Odun, ${BASE_ARMY_COST.iron}⛏️ Demir</span></div>
+                            <div class="text-emerald-300 font-bold">🏷️ %50 İndirimli Maliyet: ${halfG}🪙 Altın, ${halfW}🪵 Odun, ${halfI}⛏️ Demir</div>
                             <div class="text-[11px] text-indigo-200 pt-1">Envantere sakladığınızda bir sonraki <b>⚔️ Ordu</b> eğitiminde otomatik olarak kullanılır!</div>
                         </div>
                         ${canTrainNow ? `
                             <button id="btn-train-half-army-now" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
-                                ⚔️ Hemen Şimdi Yarı Fiyatına Ordu Kur (3A, 2O, 2D)
+                                ⚔️ Hemen Şimdi Yarı Fiyatına Ordu Kur (${halfG}A, ${halfW}O, ${halfI}D)
                             </button>
                         ` : `
                             <div class="text-[11px] text-amber-300 font-semibold">Aşağıdaki <b>"🎒 Envantere Sakla"</b> butonuna basarak sonraki ordunuzda otomatik kullanabilirsiniz.</div>
@@ -4708,12 +5093,12 @@
                     if (nowBtn) {
                         nowBtn.onclick = () => {
                             const cityHex = grid.get(player.cityKey);
-                            if (!cityHex || player.armies.length >= 3 || player.gold < 3 || player.wood < 2 || player.iron < 2) return;
+                            if (!cityHex || player.armies.length >= 3 || player.gold < halfG || player.wood < halfW || player.iron < halfI) return;
                             playSFX('army');
                             stage.innerHTML = '';
-                            player.gold -= 3;
-                            player.wood -= 2;
-                            player.iron -= 2;
+                            player.gold -= halfG;
+                            player.wood -= halfW;
+                            player.iron -= halfI;
                             player.armies.push({
                                 id: player.armies.length + 1,
                                 q: cityHex.q,
@@ -4731,7 +5116,7 @@
                                 });
                             }
                             focusCameraSmoothOnHex(cityHex.q, cityHex.r);
-                            finishCallback(`⚔️ Yarı fiyatına (3🪙 Altın, 2🪵 Odun, 2⛏️ Demir) yeni bir Ordu (#${player.armies.length}/3) Ana Şehrinizde eğitildi!`);
+                            finishCallback(`⚔️ Yarı fiyatına (${halfG}🪙 Altın, ${halfW}🪵 Odun, ${halfI}⛏️ Demir) yeni bir Ordu (#${player.armies.length}/3) Ana Şehrinizde eğitildi!`);
                         };
                     }
                 }
@@ -5217,23 +5602,29 @@
                     if (multiplayerSession) {
                         let selectedRival = rivals[0];
                         const renderChallengeSetup = () => {
-                            stage.innerHTML = `<div class="space-y-3">
-                                <div class="text-[11px] font-bold text-amber-300">1. Adım: Hodri Meydanı için rakip seç</div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => `
-                                    <button data-rival-id="${rival.id}" class="hodri-rival-btn px-3 py-2 rounded-xl border text-left flex items-center justify-between ${selectedRival.id === rival.id ? 'bg-amber-500/20 border-amber-400 text-white' : 'bg-slate-900/80 border-slate-700 text-slate-300'}">
-                                        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:${rival.color}"></span>${rival.name}</span>
-                                        <span class="text-amber-300">🪙${rival.gold}</span>
-                                    </button>`).join('')}</div>
-                                <div class="text-[11px] text-slate-300">İkiniz de kendi zarınızı atın. İlk atıştan sonra rakip 5 saniyede atmazsa onun zarı otomatik atılır.</div>
-                                <button id="btn-start-hodri-duel" class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs">⚔️ Düelloyu başlat</button>
-                            </div>`;
+                            stage.className = 'my-3';
+                            stage.innerHTML = `
+                                <div class="bg-slate-900/90 border border-amber-500/40 rounded-xl p-3.5 text-left space-y-3">
+                                    <div class="text-[11px] font-bold text-amber-300 uppercase tracking-wider text-center">🎲 1. Adım: Hodri Meydan İçin Rakip Seç</div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => `
+                                        <button data-rival-id="${rival.id}" class="hodri-rival-btn px-3 py-2.5 rounded-xl border text-left transition flex items-center justify-between gap-2 ${selectedRival.id === rival.id ? 'bg-amber-500/20 border-amber-400 text-white shadow-md' : 'bg-slate-950/75 border-slate-700 text-slate-300 hover:bg-slate-800'}">
+                                            <span class="flex items-center gap-2 truncate"><span class="w-3 h-3 rounded-full shrink-0" style="background:${rival.color}"></span><span class="text-xs font-bold truncate">${rival.name}</span></span>
+                                            <span class="text-amber-300 font-bold text-[11px] shrink-0">🪙${rival.gold}</span>
+                                        </button>`).join('')}</div>
+                                    <div class="text-[11px] text-slate-300 text-center">İki krallık kendi ekranından zarını atar. İlk atıştan sonra rakip 5 saniye içinde atmazsa zarı otomatik atılır.</div>
+                                    <div class="text-center">
+                                        <button id="btn-start-hodri-duel" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">⚔️ ${selectedRival.name} İle Düelloyu Başlat</button>
+                                    </div>
+                                </div>`;
                             stage.querySelectorAll('.hodri-rival-btn').forEach(button => {
                                 button.onclick = () => {
+                                    playSFX('click');
                                     selectedRival = rivals.find(item => item.id === Number(button.dataset.rivalId)) || rivals[0];
                                     renderChallengeSetup();
                                 };
                             });
                             document.getElementById('btn-start-hodri-duel').onclick = () => {
+                                playSFX('combat_start');
                                 submitMultiplayerHodriDuelAction('START', { rivalId: selectedRival.id });
                             };
                         };
@@ -6702,6 +7093,7 @@
             if (!multiplayerHodriDuel) return;
             const stage = document.getElementById('chance-interactive-stage');
             if (!stage) return;
+            stage.className = 'my-3';
             const duel = multiplayerHodriDuel;
             const challenger = players.find(item => item.id === duel.challengerId);
             const rival = players.find(item => item.id === duel.rivalId);
@@ -6709,35 +7101,59 @@
             const esc = value => String(value || '').replace(/[&<>"']/g, char => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[char]);
-            const diceFace = roll => roll ? `⚄ ${roll.value}${roll.automatic ? ' (otomatik)' : ''}` : '🎲';
+            const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+            const renderDieContent = roll => roll
+                ? `<span class="text-2xl font-extrabold">${faces[(roll.value || 1) - 1] || '🎲'} ${roll.value}</span>`
+                : `<span class="text-2xl">🎲</span>`;
+            const cRoll = duel.rolls[duel.challengerId];
+            const rRoll = duel.rolls[duel.rivalId];
             const canRoll = canLocalPlayerRollInHodriDuel() && !multiplayerHodriDuelActionPending;
             const localRoll = localPlayer ? duel.rolls[localPlayer.id] : null;
             const status = duel.stage === 'RESULT'
-                ? `<div class="text-sm font-bold text-amber-300">${esc(duel.resultText)}</div>`
+                ? `<div class="bg-amber-950/60 border border-amber-400/50 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-amber-300">${esc(duel.resultText)}</div>`
                 : duel.stage === 'REVEAL'
-                    ? '<div class="text-xs text-amber-300">Zarlar karşılaştırılıyor…</div>'
+                    ? '<div class="text-xs text-amber-300 font-semibold animate-pulse">🎲 Zarlar karşılaştırılıyor…</div>'
                     : localRoll
-                        ? '<div class="text-xs text-emerald-300">Zarın atıldı; rakibin atışı bekleniyor.</div>'
+                        ? '<div class="text-xs text-emerald-300 font-semibold">✅ Zarın atıldı; rakibin atışı bekleniyor…</div>'
                         : canRoll
-                            ? `<button data-hodri-action="ROLL" class="gold-btn text-white font-bold py-2 px-6 rounded-xl text-xs">🎲 Kendi zarını at</button>`
+                            ? `<button data-hodri-action="ROLL" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">🎲 Kendi Zarını At</button>`
                             : '<div class="text-xs text-slate-300">Düellocuların zar atması bekleniyor…</div>';
-            stage.innerHTML = `<div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 text-center space-y-3">
-                <div class="text-xs font-bold text-amber-300">🎲 HODRİ MEYDANI • Tur ${duel.round}</div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-slate-950/70 border border-amber-500/40 rounded-xl p-3">
-                        <div class="text-xs font-bold text-amber-300">${esc(challenger?.name)}</div>
-                        <div class="arena-die-rolling text-4xl py-2">${diceFace(duel.rolls[duel.challengerId])}</div>
+            stage.innerHTML = `
+                <div class="bg-slate-900/95 border border-amber-500/40 rounded-xl p-4 text-center space-y-3.5">
+                    <div class="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-[11px] font-bold text-amber-300 tracking-wider uppercase">
+                        🎲 HODRİ MEYDAN • TUR ${duel.round}
                     </div>
-                    <div class="bg-slate-950/70 border border-rose-500/40 rounded-xl p-3">
-                        <div class="text-xs font-bold text-rose-300">${esc(rival?.name)}</div>
-                        <div class="arena-die-rolling text-4xl py-2">${diceFace(duel.rolls[duel.rivalId])}</div>
+                    <div class="flex items-center justify-center gap-5 sm:gap-8">
+                        <div class="flex flex-col items-center gap-1.5">
+                            <span class="text-xs font-bold flex items-center gap-1.5" style="color:${challenger?.color || '#fbbf24'}">
+                                <span class="w-2.5 h-2.5 rounded-full" style="background:${challenger?.color || '#fbbf24'}"></span>
+                                ${esc(challenger?.name)}
+                            </span>
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 border-2 border-white shadow-xl flex items-center justify-center text-slate-950 ${duel.stage === 'REVEAL' ? 'arena-die-rolling' : ''}">
+                                ${renderDieContent(cRoll)}
+                            </div>
+                            <span class="text-[10px] text-slate-400">${cRoll ? (cRoll.automatic ? 'Otomatik atış' : 'Atıldı') : 'Bekleniyor…'}</span>
+                        </div>
+                        <div class="text-base font-extrabold text-amber-400 font-medieval">VS</div>
+                        <div class="flex flex-col items-center gap-1.5">
+                            <span class="text-xs font-bold flex items-center gap-1.5" style="color:${rival?.color || '#fb7185'}">
+                                <span class="w-2.5 h-2.5 rounded-full" style="background:${rival?.color || '#fb7185'}"></span>
+                                ${esc(rival?.name)}
+                            </span>
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500 via-rose-600 to-slate-900 border-2 border-rose-200 shadow-xl flex items-center justify-center text-white ${duel.stage === 'REVEAL' ? 'arena-die-rolling' : ''}">
+                                ${renderDieContent(rRoll)}
+                            </div>
+                            <span class="text-[10px] text-slate-400">${rRoll ? (rRoll.automatic ? 'Otomatik atış' : 'Atıldı') : 'Bekleniyor…'}</span>
+                        </div>
                     </div>
-                </div>
-                ${duel.lastRoll ? `<div class="text-xs text-slate-300">${esc(duel.lastRoll)}</div>` : ''}
-                ${status}
-            </div>`;
+                    ${duel.lastRoll ? `<div class="text-xs text-amber-200 bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-1.5">${esc(duel.lastRoll)}</div>` : ''}
+                    ${status}
+                </div>`;
             const rollButton = stage.querySelector('[data-hodri-action="ROLL"]');
-            if (rollButton) rollButton.addEventListener('click', () => submitMultiplayerHodriDuelAction('ROLL'));
+            if (rollButton) rollButton.addEventListener('click', () => {
+                playSFX('dice_tick');
+                submitMultiplayerHodriDuelAction('ROLL');
+            });
         }
 
         function broadcastMultiplayerHodriDuelState() {
@@ -6772,6 +7188,7 @@
             const loser = winner.id === challenger.id ? rival : challenger;
             loser.gold -= Math.min(loser.gold, 2);
             winner.gold += 2;
+            playSFX('trade');
             duel.stage = 'RESULT';
             duel.resultText = `${winner.name} kazandı ve 2 Altın aldı (${challenger.name}: ${challengerRoll.value}; ${rival.name}: ${rivalRoll.value}).`;
             duel.lastRoll = '';
@@ -7177,8 +7594,12 @@
                     reject('Kapalı kart seçiminiz şu anda kabul edilemiyor.');
                     return;
                 }
+                arena.pickedCardIndex = cardIndex;
                 arena.revealedCard = arena.deck[cardIndex];
                 arena.stage = 'CARDS_REVEAL';
+                const arenaChallenger = players.find(item => item.id === arena.challengerId);
+                const arenaDefender = players.find(item => item.id === arena.defenderId);
+                playCombatCardSFX(arena.revealedCard.id, arenaChallenger?.peerId, arenaDefender?.peerId, true);
                 scheduleMultiplayerArenaTimer(arena, () => resolveMultiplayerArenaCards(arena), 1250);
             } else if (packet.action === 'COIN_FLIP') {
                 if (arena.stage !== 'CHOOSE_ACTION' || arena.game !== 'COIN' ||
@@ -7251,6 +7672,7 @@
             const stage = document.getElementById('chance-interactive-stage');
             const arena = multiplayerArena;
             if (!stage || !arena) return;
+            stage.className = 'my-3';
             const localPlayer = players.find(item => item.peerId === multiplayerPeerId);
             const challenger = players.find(item => item.id === arena.challengerId);
             const defender = players.find(item => item.id === arena.defenderId);
@@ -7259,13 +7681,27 @@
             const esc = value => String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, char => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[char]);
-            const actionButton = (action, label, details = {}, classes = 'gold-btn') =>
-                `<button data-arena-action="${action}" ${Object.entries(details).map(([key, value]) => `data-${key.replace(/[A-Z]/g, char => `-${char.toLowerCase()}`)}="${esc(value)}"`).join(' ')} class="${classes} text-white font-bold py-2 px-3 rounded-lg text-xs disabled:opacity-40" ${canAct ? '' : 'disabled'}>${label}</button>`;
+            const resLabel = resource => resource === 'gold' ? '🪙 Altın' : resource === 'wood' ? '🪵 Odun' : '⛏️ Demir';
+            const formatPool = fighterId => {
+                const totals = { gold: 0, wood: 0, iron: 0 };
+                Object.values(arena.bets || {}).forEach(b => {
+                    if (b && b.submitted && b.fighterId === fighterId && b.amount > 0) totals[b.resource] += b.amount;
+                });
+                const parts = [];
+                if (totals.gold > 0) parts.push(`${totals.gold}🪙`);
+                if (totals.wood > 0) parts.push(`${totals.wood}🪵`);
+                if (totals.iron > 0) parts.push(`${totals.iron}⛏️`);
+                return parts.length ? parts.join(' ') : '0 Kaynak';
+            };
+            const actionButton = (action, label, details = {}, classes = 'gold-btn text-white font-bold py-2 px-3 rounded-xl text-xs') =>
+                `<button data-arena-action="${action}" ${Object.entries(details).map(([key, value]) => `data-${key.replace(/[A-Z]/g, char => `-${char.toLowerCase()}`)}="${esc(value)}"`).join(' ')} class="${classes} disabled:opacity-45 disabled:cursor-not-allowed" ${canAct ? '' : 'disabled'}>${label}</button>`;
             const setButtonHandlers = () => {
                 stage.querySelectorAll('[data-arena-action]').forEach(button => {
                     button.addEventListener('click', () => {
-                        playSFX('click');
                         const action = button.dataset.arenaAction;
+                        if (action === 'CARDS_SHUFFLE' || action === 'CARDS_DRAW' || action === 'CARDS_PICK') playSFX('card_flip');
+                        else if (action === 'DICE_ROLL') playSFX('dice_tick');
+                        else playSFX('click');
                         const details = {};
                         if (action === 'BET') {
                             details.fighterId = Number(stage.querySelector('[name="arena-fighter"]').value);
@@ -7289,24 +7725,30 @@
                     });
                 });
             };
-            const fighterNames = `<b>${esc(challenger?.name)}</b> ve <b>${esc(defender?.name)}</b>`;
-            const publicCardSelections = arena.game === 'CARDS'
-                ? Object.entries(arena.choices).map(([playerId, choice]) => {
-                    const chooser = players.find(item => item.id === Number(playerId));
-                    return `<div class="text-[11px] text-amber-300">${esc(chooser?.name)} kapalı kart çekti.</div>`;
-                }).join('')
-                : '';
+            const fighterNames = `<b style="color:${challenger?.color || '#fbbf24'}">${esc(challenger?.name)}</b> ve <b style="color:${defender?.color || '#38bdf8'}">${esc(defender?.name)}</b>`;
             const betRows = arena.playerIds.map(id => {
                 const bettor = players.find(item => item.id === id);
                 const bet = arena.bets[id];
-                return `<div class="text-[11px]">${esc(bettor?.name)}: ${bet?.submitted ? `bahis kilitlendi (${esc(players.find(item => item.id === bet.fighterId)?.name)}, ${bet.amount} ${esc(bet.resource)})` : 'bahis bekleniyor'}</div>`;
+                const backed = bet ? players.find(item => item.id === bet.fighterId) : null;
+                return `<div class="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-slate-900/70 border border-slate-800/80">
+                    <span class="flex items-center gap-1.5 font-semibold text-white"><span class="w-2 h-2 rounded-full" style="background:${bettor?.color || '#94a3b8'}"></span>${esc(bettor?.name)}</span>
+                    ${bet?.submitted
+                        ? `<span class="text-emerald-300 font-semibold">✅ ${esc(backed?.name)} • ${bet.amount} ${resLabel(bet.resource)}</span>`
+                        : `<span class="text-amber-300/80">⏳ Bahis bekleniyor…</span>`}
+                </div>`;
             }).join('');
 
             if (arena.stage === 'SELECT_OPPONENT') {
                 const rivals = players.filter(item => !item.eliminated && item.id !== arena.challengerId);
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 space-y-3">
-                    <div class="text-sm font-bold text-amber-300">🏟️ ${esc(challenger?.name)} rakibini seçiyor</div>
-                    ${isOwner ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => actionButton('SELECT_OPPONENT', `${esc(rival.name)} seç`, { defenderId: rival.id }, 'bg-slate-800 hover:bg-slate-700 border border-amber-400/40')).join('')}</div>` : '<div class="text-xs text-slate-300">Rakip seçimi bekleniyor...</div>'}
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 text-left space-y-3">
+                    <div class="text-xs font-bold text-amber-300 text-center uppercase tracking-wider">🏟️ AŞAMA 1/4: ${esc(challenger?.name)} Rakibini Seçiyor</div>
+                    <div class="text-[11px] text-slate-300 text-center">Seçilen rakip Arena oyununu belirleyecek; tüm krallıklar savaşçılardan birine bahis yatıracak!</div>
+                    ${isOwner ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${rivals.map(rival => actionButton(
+                        'SELECT_OPPONENT',
+                        `<span class="flex items-center gap-2 truncate"><span class="w-3 h-3 rounded-full shrink-0" style="background:${rival.color}"></span><span class="truncate">${esc(rival.name)}</span></span><span class="text-[10px] text-amber-200/90 shrink-0">🪙${rival.gold} 🪵${rival.wood} ⛏️${rival.iron}</span>`,
+                        { defenderId: rival.id },
+                        'flex items-center justify-between gap-2 bg-slate-800/90 hover:bg-amber-950/60 border border-amber-500/40 hover:border-amber-300 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition'
+                    )).join('')}</div>` : '<div class="text-xs text-slate-300 text-center py-2">Rakip seçimi bekleniyor…</div>'}
                 </div>`;
             } else if (arena.stage === 'BETTING') {
                 const resources = ['gold', 'wood', 'iron'];
@@ -7317,24 +7759,29 @@
                     amount: (localPlayer?.[defaultResource] || 0) > 0 ? 1 : 0
                 });
                 const submitted = !!arena.bets[localPlayer?.id]?.submitted;
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 space-y-2">
-                    <div class="text-sm font-bold text-emerald-300">💰 Her krallık kendi ekranından bahis koysun</div>
-                    <div class="text-xs text-slate-200">Savaşçılar: ${fighterNames}</div>
-                    <div class="bg-slate-950/70 rounded-lg p-2 space-y-1">${betRows}</div>
-                    ${localPlayer && !localPlayer.eliminated ? submitted ? '<div class="text-xs text-emerald-300">Bahsiniz kilitlendi. Diğer oyuncular bekleniyor.</div>' : `
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <select name="arena-fighter" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
-                                <option value="${arena.challengerId}" ${draft.fighterId === arena.challengerId ? 'selected' : ''}>${esc(challenger?.name)} kazanır</option>
-                                <option value="${arena.defenderId}" ${draft.fighterId === arena.defenderId ? 'selected' : ''}>${esc(defender?.name)} kazanır</option>
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 space-y-2.5 text-left">
+                    <div class="text-xs font-bold text-amber-300 text-center uppercase tracking-wider">💰 AŞAMA 2/4: Bahis Masası</div>
+                    <div class="text-xs text-slate-200 text-center">Savaşçılar: ${fighterNames}</div>
+                    <div class="text-[10px] text-slate-300 text-center leading-relaxed bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5">
+                        • <b>Kazanan Savaşçı:</b> Karşı tarafa yatırılan tüm kaynakları alır • <b>Kazanan Bahisçiler:</b> Yatırdığının <b>2 katını</b> alır!
+                    </div>
+                    <div class="space-y-1.5">${betRows}</div>
+                    ${localPlayer && !localPlayer.eliminated ? submitted ? '<div class="text-xs text-emerald-300 font-semibold text-center py-1">✅ Bahsiniz kilitlendi. Diğer krallıklar bekleniyor…</div>' : `
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                            <select name="arena-fighter" class="bg-slate-950 border border-slate-700 focus:border-amber-400 text-white rounded-lg px-2.5 py-2 text-xs outline-none">
+                                <option value="${arena.challengerId}" ${draft.fighterId === arena.challengerId ? 'selected' : ''}>⚔️ ${esc(challenger?.name)} kazanır</option>
+                                <option value="${arena.defenderId}" ${draft.fighterId === arena.defenderId ? 'selected' : ''}>🛡️ ${esc(defender?.name)} kazanır</option>
                             </select>
-                            <select name="arena-resource" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
-                                ${resources.map(resource => `<option value="${resource}" ${draft.resource === resource ? 'selected' : ''}>${resource === 'gold' ? 'Altın' : resource === 'wood' ? 'Odun' : 'Demir'} (${localPlayer[resource]})</option>`).join('')}
+                            <select name="arena-resource" class="bg-slate-950 border border-slate-700 focus:border-amber-400 text-white rounded-lg px-2.5 py-2 text-xs outline-none">
+                                ${resources.map(resource => `<option value="${resource}" ${draft.resource === resource ? 'selected' : ''}>${resLabel(resource)} (${localPlayer[resource]})</option>`).join('')}
                             </select>
-                            <input name="arena-amount" type="number" min="0" step="1" max="${localPlayer[draft.resource]}" value="${draft.amount}" class="bg-slate-800 border border-slate-600 rounded p-2 text-xs">
+                            <input name="arena-amount" type="number" min="0" step="1" max="${localPlayer[draft.resource]}" value="${draft.amount}" class="bg-slate-950 border border-slate-700 focus:border-amber-400 text-white rounded-lg px-2.5 py-2 text-xs text-center font-bold outline-none">
                         </div>
-                        ${actionButton('BET', 'Bahsi gönder', {}, 'bg-emerald-700 hover:bg-emerald-600')}
+                        <div class="text-center pt-1">
+                            ${actionButton('BET', '🔒 Bahsi Kilitle ve Gönder', {}, 'w-full gold-btn text-white font-bold py-2.5 px-4 rounded-xl text-xs shadow-lg')}
+                        </div>
                     ` : ''}
-                    <div class="text-[10px] text-slate-400">${arena.playerIds.length} oyuncunun tamamı bahis gönderince kaynaklar kilitlenir.</div>
+                    <div class="text-[10px] text-slate-400 text-center">${arena.playerIds.length} krallığın tamamı bahis gönderdiğinde kaynaklar kilitlenir.</div>
                 </div>`;
                 const fighterSelect = stage.querySelector('[name="arena-fighter"]');
                 const resourceSelect = stage.querySelector('[name="arena-resource"]');
@@ -7351,31 +7798,45 @@
                 if (amountInput) amountInput.oninput = () => { draft.amount = Number(amountInput.value); };
             } else if (arena.stage === 'CHOOSE_GAME') {
                 const games = [
-                    ['RPS', '✊ Taş-Kağıt-Makas'], ['COIN', '🪙 Yazı-Tura'],
-                    ['CARDS', '🃏 Saldırı Kartı Düellosu'], ['DICE', '🎲 Zar Düellosu']
+                    ['RPS', '✊✋✌️ 1. Taş - Kağıt - Makas', 'İki savaşçı gizli hamlesini seçer', 'border-amber-500/40 hover:border-amber-400 text-amber-300'],
+                    ['COIN', '🪙 2. Yazı - Tura', 'Altın sikke havaya atılır, bilen kazanır', 'border-emerald-500/40 hover:border-emerald-400 text-emerald-300'],
+                    ['CARDS', '🃏 3. Saldırı Kartı Seçme', 'Savunan karıştırır, saldıran kapalı kart çeker', 'border-amber-500/40 hover:border-amber-300 text-amber-300'],
+                    ['DICE', '🎲 4. Zar Atma Düellosu', 'Yüksek zarı atan arenayı kazanır', 'border-sky-500/40 hover:border-sky-400 text-sky-300']
                 ];
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 space-y-3">
-                    <div class="text-sm font-bold text-sky-300">${esc(defender?.name)} oyunu seçiyor</div>
-                    <div class="text-xs text-slate-200">Bahisler tamamlandı. Savaşçılar: ${fighterNames}</div>
-                    <div class="grid grid-cols-2 gap-2">${games.map(([game, label]) => actionButton('CHOOSE_GAME', label, { game }, 'bg-slate-800 hover:bg-slate-700 border border-sky-400/40')).join('')}</div>
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 text-left space-y-2.5">
+                    <div class="text-xs font-bold text-amber-300 text-center uppercase tracking-wider">🎮 AŞAMA 3/4: <span style="color:${defender?.color || '#38bdf8'}">${esc(defender?.name)}</span> Arena Oyununu Seçiyor</div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/80 p-2 rounded-lg border border-slate-800 text-center">
+                        <div>⚔️ <b>${esc(challenger?.name)}</b> Havuzu: <span class="text-amber-300 font-bold">${formatPool(arena.challengerId)}</span></div>
+                        <div>🛡️ <b>${esc(defender?.name)}</b> Havuzu: <span class="text-sky-300 font-bold">${formatPool(arena.defenderId)}</span></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${games.map(([game, title, desc, tone]) => actionButton(
+                        'CHOOSE_GAME',
+                        `<div class="text-xs font-bold ${tone.split(' ').pop()}">${title}</div><div class="text-[10px] text-slate-300 font-normal mt-0.5">${desc}</div>`,
+                        { game },
+                        `bg-slate-800/90 hover:bg-slate-700/90 border ${tone} rounded-xl p-2.5 text-left transition`
+                    )).join('')}</div>
                 </div>`;
             } else if (arena.stage === 'CARDS_DEFENDER') {
-                const cardIcons = { KILL_ATTACKER: '💀', KILL_DEFENDER: '⚔️', DRAW_1: '⚖️' };
                 const mayArrangeCards = localPlayer?.id === arena.defenderId;
                 const deckMarkup = arena.deck.map((card, index) => mayArrangeCards
-                    ? `<div draggable="${canAct}" data-arena-card-index="${index}" class="w-24 min-h-24 rounded-lg border-2 border-amber-400 bg-slate-950/90 p-2 flex flex-col items-center justify-center text-center cursor-grab ${arena.lastRoll.includes('yerini değiştiriyor') ? 'combat-card-shuffling' : ''}">
-                        <span class="text-2xl">${cardIcons[card.id] || '⚔️'}</span><b class="text-[10px] text-amber-300">${esc(card.name.replace(/^[^ ]+ /, ''))}</b>
+                    ? `<div draggable="${canAct}" data-arena-card-index="${index}" class="bg-slate-900/95 border border-amber-500/50 hover:border-amber-300 rounded-xl p-2.5 text-center flex flex-col justify-between min-h-[115px] cursor-grab active:cursor-grabbing shadow-md transition ${arena.lastRoll.includes('yerini değiştiriyor') || arena.lastRoll.includes('karıştırıyor') ? 'combat-card-shuffling' : ''}">
+                        <div class="text-xs font-bold text-amber-400">${esc(card.name)}</div>
+                        <div class="text-[10px] text-slate-300 leading-tight mt-1">${esc(card.desc)}</div>
+                        <span class="mt-1.5 text-[9px] text-amber-300/75 font-semibold">Sürükleyerek sırala</span>
                     </div>`
-                    : `<div aria-label="Kapalı savaş kartı" class="w-12 h-16 rounded-lg border-2 border-purple-400 bg-gradient-to-br from-purple-700 to-slate-950 flex items-center justify-center text-xl combat-card-shuffling">🂠</div>`
+                    : `<div aria-label="Kapalı savaş kartı" class="card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[115px] shadow-lg ${arena.lastRoll ? 'combat-card-shuffling' : ''}">
+                        <span class="text-2xl mb-1">⚔️</span>
+                        <span class="text-[10px] font-bold text-amber-200 uppercase tracking-wider">KAPALI</span>
+                    </div>`
                 ).join('');
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-purple-300">🃏 Arena Saldırı Kartı • Tur ${arena.round}</div>
-                    <div class="text-xs text-slate-200">${esc(defender?.name)} desteyi yönetiyor; ${esc(challenger?.name)} kartı çekecek.</div>
-                    <div class="flex justify-center gap-2 ${arena.lastRoll.includes('karıştırıyor') ? 'combat-card-shuffling' : ''}">${deckMarkup}</div>
-                    ${arena.lastRoll ? `<div class="text-xs text-amber-300">${esc(arena.lastRoll)}</div>` : ''}
-                    ${localPlayer?.id === arena.defenderId
-                        ? `<div class="flex justify-center gap-2">${actionButton('CARDS_SHUFFLE', '🔀 Karıştır', {}, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')}${actionButton('CARDS_DRAW', '🂠 Kart çektir', {}, 'bg-purple-700 hover:bg-purple-600')}</div>`
-                        : '<div class="text-xs text-slate-300">Savunan oyuncunun kararı bekleniyor...</div>'}
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-red-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="inline-block px-3 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ARENA SAVAŞ DESTESİ • TUR ${arena.round}</div>
+                    <div class="text-xs text-slate-200">Savunan <b style="color:${defender?.color || '#38bdf8'}">${esc(defender?.name)}</b> kartları sıralayıp karıştırıyor; saldıran <b style="color:${challenger?.color || '#fbbf24'}">${esc(challenger?.name)}</b> kapalı kart çekecek.</div>
+                    <div class="grid grid-cols-3 gap-2.5">${deckMarkup}</div>
+                    ${arena.lastRoll ? `<div class="text-xs text-amber-300 font-semibold">${esc(arena.lastRoll)}</div>` : ''}
+                    ${mayArrangeCards
+                        ? `<div class="flex justify-center gap-2.5">${actionButton('CARDS_SHUFFLE', '🔀 Karıştır', {}, 'gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs shadow-lg')}${actionButton('CARDS_DRAW', '🃏 Kart Çektir', {}, 'bg-amber-700 hover:bg-amber-600 border border-amber-400 text-white font-bold py-2 px-5 rounded-xl text-xs shadow-lg')}</div>`
+                        : '<div class="text-xs text-slate-300">Savunan oyuncunun desteyi hazırlaması bekleniyor…</div>'}
                 </div>`;
                 if (mayArrangeCards) {
                     let draggedIndex = null;
@@ -7389,6 +7850,7 @@
                             event.preventDefault();
                             const targetIndex = Number(cardElement.dataset.arenaCardIndex);
                             if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                                playSFX('card_flip');
                                 submitMultiplayerArenaAction('CARDS_MOVE', {
                                     fromIndex: draggedIndex,
                                     toIndex: targetIndex
@@ -7399,113 +7861,133 @@
                     });
                 }
             } else if (arena.stage === 'CARDS_PICK') {
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-purple-300">🂠 ${esc(challenger?.name)} kapalı kart seçiyor • Tur ${arena.round}</div>
-                    <div class="grid grid-cols-3 gap-2">${arena.deck.map((_, index) =>
-                        actionButton('CARDS_PICK', `🂠 Kart ${index + 1}`, { cardIndex: index }, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')
+                const isPicker = localPlayer?.id === arena.challengerId;
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-red-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="inline-block px-3 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ARENA SAVAŞ DESTESİ • TUR ${arena.round}</div>
+                    <div class="text-xs text-slate-200"><b style="color:${challenger?.color || '#fbbf24'}">${esc(challenger?.name)}</b> kapalı savaş kartlarından 1 tanesini seçiyor!</div>
+                    <div class="grid grid-cols-3 gap-2.5">${arena.deck.map((_, index) =>
+                        actionButton(
+                            'CARDS_PICK',
+                            `<span class="text-2xl mb-1">⚔️</span><span class="text-[11px] font-bold text-amber-200 uppercase tracking-wider">KART #${index + 1}</span><span class="text-[9px] text-amber-300/80 mt-0.5">${isPicker ? 'Çekmek İçin Tıkla' : 'Kapalı'}</span>`,
+                            { cardIndex: index },
+                            'card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[115px] cursor-pointer shadow-lg'
+                        )
                     ).join('')}</div>
-                    ${localPlayer?.id === arena.challengerId ? '' : '<div class="text-xs text-slate-300">Kart seçimi bekleniyor...</div>'}
+                    ${isPicker ? '' : '<div class="text-xs text-slate-300">Saldıran oyuncunun kart seçmesi bekleniyor…</div>'}
                 </div>`;
             } else if (arena.stage === 'CARDS_REVEAL') {
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-purple-300">🃏 Arena Saldırı Kartı Açılıyor</div>
-                    <div class="chance-flip-in mx-auto max-w-xs rounded-xl border-2 border-amber-400 bg-slate-950/90 p-3">
-                        <div class="text-2xl">⚔️</div>
-                        <div class="text-sm font-bold text-amber-300">${esc(arena.revealedCard?.name)}</div>
-                        <div class="text-xs text-slate-200">${esc(arena.revealedCard?.desc)}</div>
-                    </div>
+                const pickedCardId = arena.revealedCard?.id;
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-red-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="inline-block px-3 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ARENA SAVAŞ KARTI AÇILDI!</div>
+                    <div class="grid grid-cols-3 gap-2.5">${arena.deck.map((card, index) => {
+                        const isPicked = arena.pickedCardIndex !== undefined ? index === arena.pickedCardIndex : card.id === pickedCardId;
+                        return `<div class="rounded-xl p-2.5 text-center flex flex-col justify-between min-h-[115px] transition-all duration-300 ${isPicked ? 'chance-flip-in bg-amber-950/90 border-2 border-amber-300 scale-105 shadow-xl' : 'bg-slate-900/60 border border-slate-700 opacity-55'}">
+                            <div class="text-xs font-bold ${isPicked ? 'text-amber-300' : 'text-slate-300'}">${esc(card.name)}</div>
+                            <div class="text-[10px] text-slate-200 leading-tight mt-1">${esc(card.desc)}</div>
+                            ${isPicked ? '<span class="mt-1 text-[9px] font-extrabold text-emerald-300 uppercase">SEÇİLEN KART</span>' : ''}
+                        </div>`;
+                    }).join('')}</div>
                 </div>`;
             } else if (arena.stage === 'CHOOSE_ACTION') {
                 let selectionControls = '';
+                const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
                 if (arena.game === 'DICE') {
-                    const rollRows = [arena.challengerId, arena.defenderId].map(id => {
+                    const rollRows = [arena.challengerId, arena.defenderId].map((id, index) => {
                         const fighter = players.find(item => item.id === id);
                         const roll = arena.rolls[id];
-                        return `<div class="bg-slate-950/70 rounded-lg p-2 text-sm">${esc(fighter?.name)}: ${roll ? `🎲 ${roll.value}${roll.automatic ? ' <span class="text-amber-300">(otomatik)</span>' : ''}` : 'zar atmadı'}</div>`;
-                    }).join('');
+                        const dieStyle = index === 0
+                            ? 'bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 border-white text-slate-950'
+                            : 'bg-gradient-to-br from-sky-500 via-sky-600 to-slate-900 border-sky-200 text-white';
+                        return `<div class="flex flex-col items-center gap-1.5">
+                            <span class="text-xs font-bold flex items-center gap-1.5" style="color:${fighter?.color || '#fbbf24'}"><span class="w-2.5 h-2.5 rounded-full" style="background:${fighter?.color || '#fbbf24'}"></span>${esc(fighter?.name)}</span>
+                            <div class="w-16 h-16 rounded-2xl border-2 shadow-xl flex items-center justify-center text-2xl font-extrabold ${dieStyle}">${roll ? `${faces[(roll.value || 1) - 1]} ${roll.value}` : '🎲'}</div>
+                            <span class="text-[10px] text-slate-400">${roll ? (roll.automatic ? 'Otomatik atış' : 'Atıldı') : 'Bekleniyor…'}</span>
+                        </div>`;
+                    }).join('<div class="text-base font-extrabold text-amber-400 font-medieval">VS</div>');
                     const alreadyRolled = !!arena.rolls[localPlayer?.id];
                     const isFighter = [arena.challengerId, arena.defenderId].includes(localPlayer?.id);
                     const nextRoller = players.find(item => item.id === arena.nextRollerId);
                     const rollControl = localPlayer?.id === arena.nextRollerId
-                        ? actionButton('DICE_ROLL', `🎲 ${esc(localPlayer?.name)} zarını at`, {}, 'bg-sky-700 hover:bg-sky-600')
+                        ? actionButton('DICE_ROLL', `🎲 ${esc(localPlayer?.name)} Zarını At`, {}, 'gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg')
                         : alreadyRolled
-                            ? '<div class="text-xs text-emerald-300">Zarınız atıldı; rakip zarını bekliyor.</div>'
+                            ? '<div class="text-xs text-emerald-300 font-semibold">✅ Zarınız atıldı; rakip zarını bekliyor…</div>'
                             : isFighter
-                                ? `<div class="text-xs text-slate-300">${esc(nextRoller?.name)} zarını atacak.</div>`
-                                : '<div class="text-xs text-slate-300">Savaşçıların zarları bekleniyor...</div>';
-                    selectionControls = `<div class="grid grid-cols-2 gap-2">${rollRows}</div>${rollControl}`;
+                                ? `<div class="text-xs text-slate-300">Sıra <b>${esc(nextRoller?.name)}</b> oyuncusunda…</div>`
+                                : '<div class="text-xs text-slate-300">Savaşçıların zar atması bekleniyor…</div>';
+                    selectionControls = `<div class="flex items-center justify-center gap-6 py-1">${rollRows}</div>${rollControl}`;
                 } else if (localPlayer && [arena.challengerId, arena.defenderId].includes(localPlayer.id)) {
                     const hasChosen = !!arena.choices[localPlayer.id];
                     if (arena.game === 'COIN') {
                         if (localPlayer.id === arena.defenderId) {
                             selectionControls = hasChosen
-                                ? `<div class="text-xs text-emerald-300">Tahmininiz: ${arena.choices[localPlayer.id] === 'heads' ? 'Yazı' : 'Tura'}. Saldıranın parayı atması bekleniyor.</div>`
-                                : `<div class="text-xs font-bold text-emerald-300">Savunan yazı ya da tura seçer:</div><div class="grid grid-cols-2 gap-2">${[['heads', '🪙 Yazı'], ['tails', '👑 Tura']].map(([choice, label]) => actionButton('CHOICE', label, { choice }, 'bg-slate-800 hover:bg-emerald-900/60 border border-emerald-400/40')).join('')}</div>`;
+                                ? `<div class="text-xs text-emerald-300 font-semibold">✅ Tahmininiz: <b>${arena.choices[localPlayer.id] === 'heads' ? '🪙 Yazı' : '👑 Tura'}</b>. Saldıranın parayı atması bekleniyor…</div>`
+                                : `<div class="text-xs font-bold text-amber-300">Savunan Yazı ya da Tura seçer:</div><div class="grid grid-cols-2 gap-3">${[['heads', '🪙 YAZI', 'bg-amber-700 hover:bg-amber-600 border-2 border-amber-300'], ['tails', '👑 TURA', 'bg-sky-700 hover:bg-sky-600 border-2 border-sky-300']].map(([choice, label, cls]) => actionButton('CHOICE', label, { choice }, `${cls} rounded-xl p-3 text-white font-bold text-sm shadow-lg transition`)).join('')}</div>`;
                         } else {
                             selectionControls = arena.coinResult
-                                ? '<div class="text-xs text-emerald-300">Para atıldı; sonuç belirleniyor...</div>'
-                                : actionButton('COIN_FLIP', '🪙 Parayı at', {}, 'bg-emerald-700 hover:bg-emerald-600');
+                                ? '<div class="text-xs text-emerald-300 font-semibold">Para atıldı; sonuç belirleniyor…</div>'
+                                : (arena.choices[arena.defenderId]
+                                    ? actionButton('COIN_FLIP', '🪙 Altın Sikkeyi Havaya At', {}, 'gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg')
+                                    : `<div class="text-xs text-slate-300">Savunan <b>${esc(defender?.name)}</b> Yazı veya Tura seçiyor…</div>`);
                         }
-                    } else if (hasChosen) selectionControls = '<div class="text-xs text-emerald-300">Kararınız gizlice gönderildi; rakibiniz bekleniyor.</div>';
+                    } else if (hasChosen) selectionControls = '<div class="text-xs text-emerald-300 font-semibold">✅ Kararınız gizlice gönderildi; rakibiniz bekleniyor…</div>';
                     else if (arena.game === 'RPS') {
-                        selectionControls = `<div class="grid grid-cols-3 gap-2">${[['rock', '✊ Taş'], ['paper', '✋ Kağıt'], ['scissors', '✌️ Makas']].map(([choice, label]) => actionButton('CHOICE', label, { choice }, 'bg-slate-800 hover:bg-amber-900/60 border border-amber-400/40')).join('')}</div>`;
-                    } else {
-                        const opponentId = localPlayer.id === arena.challengerId ? arena.defenderId : arena.challengerId;
-                        const opponentChoice = arena.choices[opponentId];
-                        selectionControls = `<div class="grid grid-cols-3 gap-2">${arena.deck.map((card, index) =>
-                            String(index) === opponentChoice
-                                ? '<div class="bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-[10px] text-slate-500">Çekildi</div>'
-                                : actionButton('CHOICE', `🂠 Kapalı kart ${index + 1}`, { choice: index }, 'bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40')
-                        ).join('')}</div>`;
+                        selectionControls = `<div class="grid grid-cols-3 gap-2.5">${[['rock', '✊', 'Taş'], ['paper', '✋', 'Kağıt'], ['scissors', '✌️', 'Makas']].map(([choice, icon, label]) => actionButton('CHOICE', `<span class="text-3xl">${icon}</span><span class="text-xs font-bold text-white mt-1">${label}</span>`, { choice }, 'bg-slate-800 hover:bg-amber-900/60 border-2 border-amber-400/50 hover:border-amber-300 rounded-xl p-3 flex flex-col items-center transition')).join('')}</div>`;
                     }
                 } else {
-                    selectionControls = '<div class="text-xs text-slate-300">Savaşçıların kararları bekleniyor...</div>';
+                    selectionControls = '<div class="text-xs text-slate-300">Savaşçıların kararları bekleniyor…</div>';
                 }
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 space-y-3">
-                    <div class="text-sm font-bold text-purple-300">⚔️ ${arena.game === 'RPS' ? 'Taş-Kağıt-Makas' : arena.game === 'COIN' ? 'Yazı-Tura' : arena.game === 'CARDS' ? 'Saldırı Kartı Düellosu' : 'Zar Düellosu'} • Tur ${arena.round}</div>
-                    <div class="text-xs text-slate-200">Kararlar her savaşçının kendi cihazından gizlice verilir. ${fighterNames}</div>
-                    ${arena.lastRoll ? `<div class="text-xs text-amber-300">${esc(arena.lastRoll)}</div>` : ''}
-                    ${publicCardSelections}
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="inline-block px-3 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ${arena.game === 'RPS' ? 'TAŞ-KAĞIT-MAKAS' : arena.game === 'COIN' ? 'YAZI-TURA' : arena.game === 'CARDS' ? 'SALDIRI KARTI DÜELLOSU' : 'ZAR DÜELLOSU'} • TUR ${arena.round}</div>
+                    <div class="text-xs text-slate-200">${fighterNames}</div>
+                    ${arena.lastRoll ? `<div class="text-xs text-amber-300 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1">${esc(arena.lastRoll)}</div>` : ''}
                     ${selectionControls}
                 </div>`;
             } else if (arena.stage === 'RPS_ANIMATING') {
                 const faces = { rock: '✊', paper: '✋', scissors: '✌️' };
                 const names = { rock: 'Taş', paper: 'Kağıt', scissors: 'Makas' };
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-amber-300">✊ Taş-Kağıt-Makas Düellosu • Tur ${arena.round}</div>
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="text-xs font-bold text-amber-300 uppercase tracking-wider">✊✋✌️ TAŞ - KAĞIT - MAKAS • TUR ${arena.round}</div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="arena-rps-left rounded-xl border border-amber-500/40 bg-slate-950/70 p-3"><div class="text-xs">${esc(challenger?.name)}</div><div class="text-5xl">${faces[arena.choices[arena.challengerId]]}</div><div class="text-xs text-amber-300">${names[arena.choices[arena.challengerId]]}</div></div>
-                        <div class="arena-rps-right rounded-xl border border-sky-500/40 bg-slate-950/70 p-3"><div class="text-xs">${esc(defender?.name)}</div><div class="text-5xl">${faces[arena.choices[arena.defenderId]]}</div><div class="text-xs text-sky-300">${names[arena.choices[arena.defenderId]]}</div></div>
+                        <div class="arena-rps-left rounded-xl border border-amber-500/40 bg-slate-950/70 p-3"><div class="text-xs font-bold" style="color:${challenger?.color || '#fbbf24'}">${esc(challenger?.name)}</div><div class="text-5xl my-1">${faces[arena.choices[arena.challengerId]]}</div><div class="text-xs text-amber-300 font-bold">${names[arena.choices[arena.challengerId]]}</div></div>
+                        <div class="arena-rps-right rounded-xl border border-sky-500/40 bg-slate-950/70 p-3"><div class="text-xs font-bold" style="color:${defender?.color || '#38bdf8'}">${esc(defender?.name)}</div><div class="text-5xl my-1">${faces[arena.choices[arena.defenderId]]}</div><div class="text-xs text-sky-300 font-bold">${names[arena.choices[arena.defenderId]]}</div></div>
                     </div>
-                    <div class="text-xs text-slate-300">Düello sürüyor...</div>
+                    <div class="text-xs text-slate-300">Düello sürüyor…</div>
                 </div>`;
             } else if (arena.stage === 'COIN_ANIMATING') {
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-emerald-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-emerald-300">🪙 Yazı-Tura</div>
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="text-xs font-bold text-amber-300 uppercase tracking-wider">🪙 YAZI - TURA</div>
                     <div class="arena-coin-flipping text-6xl py-3">${arena.coinResult === 'heads' ? '🪙' : '👑'}</div>
-                    <div class="text-xs text-slate-300">Sikke havada dönüyor...</div>
+                    <div class="text-xs text-slate-300">Altın sikke havada dönüyor…</div>
                 </div>`;
             } else if (arena.stage === 'DICE_REVEAL') {
                 const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-sky-500/40 rounded-xl p-3 space-y-3 text-center">
-                    <div class="text-sm font-bold text-sky-300">🎲 Zar Düellosu • Tur ${arena.round}</div>
-                    <div class="grid grid-cols-2 gap-3">
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 space-y-3 text-center">
+                    <div class="text-xs font-bold text-amber-300 uppercase tracking-wider">🎲 ZAR DÜELLOSU • TUR ${arena.round}</div>
+                    <div class="flex items-center justify-center gap-6 py-1">
                         ${[arena.challengerId, arena.defenderId].map((id, index) => {
                             const fighter = players.find(item => item.id === id);
                             const roll = arena.rolls[id];
-                            return `<div class="bg-slate-950/70 rounded-xl p-3"><div class="text-xs">${esc(fighter?.name)}</div><div class="arena-die-rolling text-5xl py-2">${faces[roll.value - 1]} ${roll.value}</div><div class="text-[10px] text-amber-300">${roll.automatic ? 'Otomatik atış' : 'Oyuncu attı'}</div></div>`;
-                        }).join('')}
+                            const dieStyle = index === 0
+                                ? 'bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 border-white text-slate-950'
+                                : 'bg-gradient-to-br from-sky-500 via-sky-600 to-slate-900 border-sky-200 text-white';
+                            return `<div class="flex flex-col items-center gap-1.5">
+                                <span class="text-xs font-bold" style="color:${fighter?.color || '#fbbf24'}">${esc(fighter?.name)}</span>
+                                <div class="arena-die-rolling w-16 h-16 rounded-2xl border-2 shadow-xl flex items-center justify-center text-2xl font-extrabold ${dieStyle}">${faces[(roll.value || 1) - 1]} ${roll.value}</div>
+                                <div class="text-[10px] text-amber-300">${roll.automatic ? 'Otomatik atış' : 'Oyuncu attı'}</div>
+                            </div>`;
+                        }).join('<div class="text-base font-extrabold text-amber-400 font-medieval">VS</div>')}
                     </div>
                 </div>`;
             } else if (arena.stage === 'RESULT') {
-                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border-2 border-amber-400 rounded-xl p-3 space-y-2 text-center">
-                    <div class="text-sm font-extrabold text-amber-300">🏆 ARENA ŞAMPİYONU: ${esc(players.find(item => item.id === arena.result.winnerId)?.name)}!</div>
+                stage.innerHTML = `<div class="arena-multiplayer-controls bg-slate-900/95 border-2 border-amber-400 rounded-xl p-4 space-y-2.5 text-center shadow-xl">
+                    <div class="text-sm font-extrabold text-amber-300 font-medieval">🏆 ARENA ŞAMPİYONU: ${esc(players.find(item => item.id === arena.result.winnerId)?.name)}!</div>
                     <div class="text-xs text-slate-200">${esc(arena.result.summary)}</div>
-                    <div class="text-[11px] text-amber-300">Ganimet: ${esc(arena.result.seizedText)} • Kazanan bahisçiler: ${esc(arena.result.bettorRewards)}</div>
-                    ${isOwner ? actionButton('FINISH', 'Arena sonuçlarını onayla') : '<div class="text-xs text-slate-400">Kartı çeken oyuncu sonucu onaylayacak.</div>'}
+                    <div class="text-[11px] text-amber-200 bg-slate-950/75 border border-amber-500/30 rounded-lg px-3 py-1.5">💰 Ganimet: <b>${esc(arena.result.seizedText)}</b> • Kazanan bahisçiler: <b>${esc(arena.result.bettorRewards)}</b></div>
+                    ${isOwner ? actionButton('FINISH', '✅ Arena Sonuçlarını Onayla', {}, 'gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs shadow-lg') : '<div class="text-xs text-slate-400">Kartı çeken oyuncu sonucu onaylayacak…</div>'}
                 </div>`;
             }
             setButtonHandlers();
+            syncCombatMusicPlayback();
         }
 
         // "39. Arenaya" kartı için Çok Aşamalı Bahis ve 4 Farklı Arena Oyunu (Taş-Kağıt-Makas, Yazı-Tura, Savaş Kartı Seçme, Zar Atma) Motoru
@@ -7897,6 +8379,7 @@
 
             // OYUN 3: SALDIRI SİSTEMİNDEKİ SAVAŞ KARTI SEÇME
             function playArenaCombatCards(round = 1) {
+                startCombatMusic();
                 const deck = [...ARENA_COMBAT_DECK].sort(() => Math.random() - 0.5);
                 const cardIcons = { KILL_ATTACKER: '💀', KILL_DEFENDER: '⚔️', DRAW_1: '⚖️' };
                 let stageName = 'DEFENDER';
@@ -7904,17 +8387,17 @@
 
                 function renderArenaCardBoard() {
                     stage.innerHTML = `
-                        <div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-2.5">
-                            <div class="text-xs font-bold text-purple-300">🃏 ARENA SAVAŞ KARTI SEÇME (Tur ${round})</div>
+                        <div class="bg-slate-900/95 border border-red-500/40 rounded-xl p-3.5 text-center space-y-3">
+                            <div class="inline-block px-3 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ARENA SAVAŞ DESTESİ • TUR ${round}</div>
                             ${stageName === 'DEFENDER'
-                                ? `<div class="text-xs text-white"><b style="color:${defender.color}">${defender.name}</b> desteyi karıştırır veya saldırana kart çektirir.</div>
-                                    <div class="flex flex-wrap justify-center gap-2 ${shuffleAnimation ? 'combat-card-shuffling' : ''}">${deck.map((card, index) => `<div draggable="true" data-arena-arrange-index="${index}" class="w-24 min-h-24 rounded-lg border-2 border-amber-400 bg-slate-950/90 p-2 flex flex-col items-center justify-center text-center cursor-grab"><span class="text-2xl">${cardIcons[card.id]}</span><b class="text-[10px] text-amber-300">${card.name.replace(/^[^ ]+ /, '')}</b></div>`).join('')}</div>
-                                    <div class="flex justify-center gap-2">
-                                        <button id="btn-arena-card-shuffle" class="bg-slate-800 hover:bg-purple-900/60 border border-purple-400/40 text-white font-bold py-2 px-3 rounded-lg text-xs">🔀 Karıştır</button>
-                                        <button id="btn-arena-card-draw" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-2 px-3 rounded-lg text-xs">🂠 Kart çektir</button>
+                                ? `<div class="text-xs text-slate-200">Savunan <b style="color:${defender.color}">${defender.name}</b> kartları sürükleyip sıralayabilir veya karıştırabilir; ardından <b style="color:${player.color}">${player.name}</b> kart çeker.</div>
+                                    <div class="grid grid-cols-3 gap-2.5 ${shuffleAnimation ? 'combat-card-shuffling' : ''}">${deck.map((card, index) => `<div draggable="true" data-arena-arrange-index="${index}" class="bg-slate-900/95 border border-amber-500/50 hover:border-amber-300 rounded-xl p-2.5 flex flex-col justify-between text-center min-h-[115px] cursor-grab active:cursor-grabbing shadow-md"><div class="text-xs font-bold text-amber-400">${card.name}</div><div class="text-[10px] text-slate-300 leading-tight mt-1">${card.desc}</div><span class="mt-1 text-[9px] text-amber-300/75 font-semibold">Sürükleyerek sırala</span></div>`).join('')}</div>
+                                    <div class="flex justify-center gap-2.5">
+                                        <button id="btn-arena-card-shuffle" class="gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs shadow-lg">🔀 Karıştır</button>
+                                        <button id="btn-arena-card-draw" class="bg-amber-700 hover:bg-amber-600 border border-amber-400 text-white font-bold py-2 px-5 rounded-xl text-xs shadow-lg">🃏 Kart Çektir</button>
                                     </div>`
-                                : `<div class="text-xs text-white"><b style="color:${player.color}">${player.name}</b> kapalı kartlardan birini seçiyor.</div>
-                                    <div class="grid grid-cols-3 gap-2">${deck.map((_, idx) => `<button data-cidx="${idx}" class="btn-arena-card card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-2 flex flex-col items-center justify-center min-h-[82px] cursor-pointer shadow"><span class="text-xl">🂠</span><span class="text-[10px] font-bold text-amber-200 mt-0.5">KART #${idx + 1}</span></button>`).join('')}</div>`
+                                : `<div class="text-xs text-slate-200"><b style="color:${player.color}">${player.name}</b> kapalı savaş kartlarından 1 tanesini seçiyor!</div>
+                                    <div class="grid grid-cols-3 gap-2.5">${deck.map((_, idx) => `<button data-cidx="${idx}" class="btn-arena-card card-3d bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 border-2 border-amber-400 rounded-xl p-3 flex flex-col items-center justify-center min-h-[115px] cursor-pointer shadow-lg"><span class="text-2xl mb-1">⚔️</span><span class="text-[11px] font-bold text-amber-200 uppercase tracking-wider">KART #${idx + 1}</span><span class="text-[9px] text-amber-300/80 mt-0.5">Çekmek İçin Tıkla</span></button>`).join('')}</div>`
                             }
                         </div>
                     `;
@@ -7957,12 +8440,18 @@
                     });
                     stage.querySelectorAll('.btn-arena-card').forEach(btn => {
                         btn.onclick = () => {
-                            playSFX('card_flip');
                             const idx = parseInt(btn.getAttribute('data-cidx'));
                             const card = deck[idx];
-                            stage.innerHTML = `<div class="bg-slate-900/95 border border-purple-500/40 rounded-xl p-3 text-center space-y-3">
-                                <div class="text-xs font-bold text-purple-300">🃏 Arena Saldırı Kartı Açılıyor</div>
-                                <div class="chance-flip-in mx-auto max-w-xs rounded-xl border-2 border-amber-400 bg-slate-950/90 p-3"><div class="text-2xl">⚔️</div><div class="text-sm font-bold text-amber-300">${card.name}</div><div class="text-xs text-slate-200">${card.desc}</div></div>
+                            playCombatCardSFX(card.id, player.peerId, defender.peerId, false);
+                            stage.innerHTML = `<div class="bg-slate-900/95 border border-red-500/40 rounded-xl p-3.5 text-center space-y-3">
+                                <div class="inline-block px-3 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider">⚔️ ARENA SAVAŞ KARTI AÇILDI!</div>
+                                <div class="grid grid-cols-3 gap-2.5">${deck.map((c, cIdx) => `
+                                    <div class="rounded-xl p-2.5 text-center flex flex-col justify-between min-h-[115px] transition-all duration-300 ${cIdx === idx ? 'chance-flip-in bg-amber-950/90 border-2 border-amber-300 scale-105 shadow-xl' : 'bg-slate-900/60 border border-slate-700 opacity-55'}">
+                                        <div class="text-xs font-bold ${cIdx === idx ? 'text-amber-300' : 'text-slate-300'}">${c.name}</div>
+                                        <div class="text-[10px] text-slate-200 leading-tight mt-1">${c.desc}</div>
+                                        ${cIdx === idx ? '<span class="mt-1 text-[9px] font-extrabold text-emerald-300 uppercase">SEÇİLEN KART</span>' : ''}
+                                    </div>
+                                `).join('')}</div>
                             </div>`;
                             setTimeout(() => {
                                 if (card.id === 'DRAW_1') {
@@ -7974,6 +8463,7 @@
                                     return;
                                 }
                                 const attackerDies = card.id === 'KILL_ATTACKER';
+                                stopCombatMusic();
                                 resolveArenaPayout(attackerDies ? defender : player, attackerDies ? player : defender,
                                     `Saldırı Kartı Düellosu (${card.name})`);
                             }, 1250);
@@ -8691,6 +9181,8 @@
                 }
             };
 
+            const interactiveStageReset = document.getElementById('chance-interactive-stage');
+            if (interactiveStageReset) interactiveStageReset.className = 'my-3';
             if (card.renderInteractive) {
                 card.renderInteractive(player, armyIndex, finishCallback);
             }
@@ -8704,6 +9196,7 @@
         }
 
         function closeChanceModal() {
+            stopCombatMusic();
             document.getElementById('chance-modal').classList.add('hidden');
             document.getElementById('chance-role-display').classList.add('hidden');
             if (localHodriDuelCleanup) {
@@ -9137,10 +9630,11 @@
         }
 
         function inviteTradeTarget() {
-            if (!multiplayerSession || !multiplayerCanAct()) return;
-            const target = players.find(player => player.id === parseInt(document.getElementById('trade-target-player').value));
+            if (!multiplayerSession) return;
             const activePlayer = getActivePlayer();
-            if (!target || !activePlayer || !target.peerId) {
+            if (!activePlayer || activePlayer.peerId !== multiplayerPeerId) return;
+            const target = players.find(player => player.id === parseInt(document.getElementById('trade-target-player').value));
+            if (!target || !target.peerId) {
                 setMultiplayerNotice('Ticaret daveti için geçerli bir oyuncu seçin.', 'rose');
                 return;
             }
@@ -9153,7 +9647,7 @@
             const sent = sendMultiplayerTradePacket({
                 type: 'TRADE_INVITE',
                 sessionId: inviteId,
-                toPeerId: target.peerId
+                targetPeerId: target.peerId
             });
             if (!sent) {
                 clearPendingTradeInvite();
@@ -9471,6 +9965,7 @@
         }
 
         function leaveMultiplayerRoom() {
+            stopCombatMusic();
             if (multiplayerReconnectTimer) clearTimeout(multiplayerReconnectTimer);
             if (multiplayerSession) {
                 if (multiplayerIsHost) {
@@ -9566,10 +10061,10 @@
                 }
             }
 
-            if (multiplayerTradeNegotiation &&
-                [multiplayerTradeNegotiation.peerA, multiplayerTradeNegotiation.peerB].includes(peerId)) {
-                const session = multiplayerTradeNegotiation;
-                multiplayerTradeNegotiation = null;
+            if (multiplayerHostTradeSession &&
+                [multiplayerHostTradeSession.peerA, multiplayerHostTradeSession.peerB].includes(peerId)) {
+                const session = multiplayerHostTradeSession;
+                multiplayerHostTradeSession = null;
                 publishTradeSession(
                     session,
                     'TRADE_SESSION_FINISHED',
@@ -9579,6 +10074,7 @@
 
             if (currentCombat &&
                 (currentCombat.attacker.id === player.id || currentCombat.defender.id === player.id)) {
+                stopCombatMusic();
                 currentCombat = null;
                 document.getElementById('combat-modal').classList.add('hidden');
                 subMode = null;
@@ -9630,10 +10126,72 @@
             const hudPlayer = multiplayerSession
                 ? players.find(player => player.peerId === multiplayerPeerId) || p
                 : p;
+            const isMyTurnNow = !multiplayerSession || p.peerId === multiplayerPeerId;
+
+            // Oyuncunun kendi kaynaklarındaki artış/azalışı yakalayıp HUD üzerinde belirgin bildirim çıkar
+            if (gameState !== 'PREVIEW') {
+                if (lastHudResources && lastHudResources.id === hudPlayer.id) {
+                    const dGold = hudPlayer.gold - lastHudResources.gold;
+                    const dWood = hudPlayer.wood - lastHudResources.wood;
+                    const dIron = hudPlayer.iron - lastHudResources.iron;
+                    if (dGold !== 0) triggerHudResourceDelta('gold', dGold);
+                    if (dWood !== 0) triggerHudResourceDelta('wood', dWood);
+                    if (dIron !== 0) triggerHudResourceDelta('iron', dIron);
+                }
+                lastHudResources = {
+                    id: hudPlayer.id,
+                    gold: hudPlayer.gold,
+                    wood: hudPlayer.wood,
+                    iron: hudPlayer.iron
+                };
+
+                // Sıra yeni bir oyuncuya geçtiğinde belirgin "SIRA SENDE!" / "SIRA X'DE" geçiş bildirimi
+                const turnAnnounceKey = `${turnNumber}:${activePlayerIndex}:${gameState.startsWith('SETUP') ? 'SETUP' : 'PLAY'}`;
+                if (lastTurnAnnouncedKey !== turnAnnounceKey) {
+                    lastTurnAnnouncedKey = turnAnnounceKey;
+                    if (multiplayerSession || !gameState.startsWith('SETUP')) {
+                        showTurnToastBanner(p, isMyTurnNow);
+                    }
+                }
+            }
+
+            // Sıra sende görsel göstergeleri (üst rozet, kenar parlaması, alt bar vurgusu)
+            const vignetteEl = document.getElementById('my-turn-vignette');
+            if (vignetteEl) {
+                vignetteEl.classList.toggle('hidden', gameState === 'PREVIEW' || !isMyTurnNow);
+            }
+            const statusPillEl = document.getElementById('hud-turn-status-pill');
+            const hudLeftEl = document.getElementById('hud-left-panel');
+            if (statusPillEl) {
+                if (isMyTurnNow) {
+                    statusPillEl.textContent = '🟢 SIRA SENDE';
+                    statusPillEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/25 border border-emerald-400 text-emerald-200 shadow-sm';
+                } else {
+                    statusPillEl.textContent = `⏳ SIRA: ${p.name.split(' ')[0].toLocaleUpperCase('tr-TR')}`;
+                    statusPillEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-rose-500/25 border border-rose-400/70 text-rose-200';
+                }
+            }
+            if (hudLeftEl) {
+                hudLeftEl.className = `glass-panel rounded-xl px-4 py-2.5 pointer-events-auto flex flex-wrap items-center gap-3.5 transition-all duration-300 ${isMyTurnNow ? 'border-emerald-400/70 shadow-[0_0_20px_rgba(16,185,129,0.22)]' : 'border-slate-700/80'}`;
+            }
+
+            const bottomBarCard = document.getElementById('bottom-action-bar-card');
+            if (bottomBarCard) {
+                const isRollPrompt = isMyTurnNow && gameState === 'PHASE_3_MOVE' && !p.hasRolledThisTurn;
+                if (isRollPrompt) {
+                    bottomBarCard.className = 'glass-panel rounded-xl px-3.5 py-2.5 pointer-events-auto flex flex-col sm:flex-row items-center justify-between gap-2 transition-all duration-300 border-2 border-amber-400 shadow-[0_0_28px_rgba(251,191,36,0.38)]';
+                } else if (isMyTurnNow) {
+                    bottomBarCard.className = 'glass-panel rounded-xl px-3.5 py-2.5 pointer-events-auto flex flex-col sm:flex-row items-center justify-between gap-2 transition-all duration-300 border-2 border-emerald-400/75 shadow-[0_0_22px_rgba(16,185,129,0.25)]';
+                } else {
+                    bottomBarCard.className = 'glass-panel rounded-xl px-3.5 py-2.5 pointer-events-auto flex flex-col sm:flex-row items-center justify-between gap-2 transition-all duration-300 border border-rose-500/50 bg-slate-950/85';
+                }
+            }
 
             document.getElementById('hud-player-dot').style.backgroundColor = hudPlayer.color;
             document.getElementById('hud-player-name').textContent = hudPlayer.name;
-            document.getElementById('hud-turn-badge').textContent = gameState.startsWith('SETUP') ? 'KURULUM' : `TUR ${turnNumber}`;
+            document.getElementById('hud-turn-badge').textContent = gameState.startsWith('SETUP')
+                ? (multiplayerSession ? 'SENİN KRALLIĞIN • KURULUM' : 'KURULUM')
+                : (multiplayerSession ? `SENİN KRALLIĞIN • TUR ${turnNumber}` : `TUR ${turnNumber}`);
             updateClockDisplay();
 
             const inc = calculatePlayerIncome(hudPlayer);
@@ -9650,10 +10208,17 @@
             const s3 = document.getElementById('phase-step-3');
             const s4 = document.getElementById('phase-step-4');
             [s1, s2, s3, s4].forEach(el => el.className = 'px-2 py-0.5 rounded bg-slate-800 text-slate-400');
+            s3.textContent = '3. Zar & Hareket';
 
             if (gameState === 'PHASE_2_WALLS') s2.className = 'px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold shadow';
             if (gameState === 'PHASE_3_MOVE') {
-                s3.className = 'px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold shadow';
+                if (!p.hasRolledThisTurn) {
+                    s3.textContent = '3. 🎲 ZAR AT!';
+                    s3.className = 'px-2.5 py-0.5 rounded bg-amber-400 text-slate-950 font-extrabold shadow-lg animate-pulse';
+                } else {
+                    s3.textContent = `3. 🏃 Hareket (${p.remainingAP} AP)`;
+                    s3.className = 'px-2.5 py-0.5 rounded bg-emerald-400 text-slate-950 font-extrabold shadow';
+                }
             }
             if (gameState === 'PHASE_4_ACTION') {
                 s4.className = 'px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold shadow';
@@ -9663,6 +10228,7 @@
             listEl.innerHTML = '';
             players.forEach((pl, idx) => {
                 const isCurrent = idx === activePlayerIndex;
+                const isLocalMe = multiplayerSession && pl.peerId === multiplayerPeerId;
                 const canUseHeldCards = isCurrent && multiplayerCanAct();
                 let heldIconsHtml = '';
                 if (pl.heldCards && pl.heldCards.length > 0) {
@@ -9712,11 +10278,12 @@
                     : '';
 
                 listEl.innerHTML += `
-                    <div class="px-2 py-1 rounded-lg border ${isCurrent ? 'bg-slate-800/90 border-amber-500/60' : 'bg-slate-900/50 border-slate-800'} ${pl.eliminated ? 'opacity-40 line-through' : ''}">
-                        <div class="flex items-center justify-between">
+                    <div class="px-2 py-1.5 rounded-lg border transition-all ${isCurrent ? 'bg-amber-950/45 border-amber-400 shadow-md ring-1 ring-amber-400/50' : 'bg-slate-900/55 border-slate-800'} ${pl.eliminated ? 'opacity-40 line-through' : ''}">
+                        <div class="flex items-center justify-between gap-1">
                             <div class="flex items-center gap-1.5 truncate">
-                                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${pl.color}"></span>
-                                <span class="font-semibold text-white truncate">${pl.name}</span>
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isCurrent ? 'ring-2 ring-white' : ''}" style="background:${pl.color}"></span>
+                                <span class="font-semibold text-white truncate">${pl.name}${isLocalMe ? ' <span class="text-[9px] text-emerald-300 font-extrabold">(SEN)</span>' : ''}</span>
+                                ${isCurrent ? '<span class="px-1 py-0.5 rounded bg-amber-400 text-slate-950 text-[8px] font-extrabold shrink-0">▶ SIRA</span>' : ''}
                             </div>
                             <div class="flex items-center gap-1 text-[10px] text-slate-300 shrink-0">
                                 <span>🪙${pl.gold}</span>
@@ -9737,7 +10304,7 @@
 
             if (multiplayerSession && multiplayerHodriDuel) {
                 const canRoll = canLocalPlayerRollInHodriDuel() && !multiplayerHodriDuelActionPending;
-                titleEl.textContent = '🎲 Hodri Meydanı düellosu sürüyor';
+                titleEl.textContent = '🎲 Hodri Meydan düellosu sürüyor';
                 subEl.textContent = canRoll
                     ? 'Şans kartı penceresinden kendi zarını at.'
                     : multiplayerHodriDuel.stage === 'RESULT'
@@ -9752,15 +10319,15 @@
                     players[activePlayerIndex]?.peerId === multiplayerPeerId;
                 titleEl.textContent = waitingForCommit
                     ? '⏳ Hamle doğrulanıyor'
-                    : `🔴 Sıra ${p.name} krallığında`;
+                    : `⏳ Sıra ${p.name} krallığında`;
                 subEl.textContent = waitingForCommit
                     ? 'Hamleniz oda sahibi tarafından onaylanıyor.'
-                    : `Sıra sende değil. Zar ve eylem kontrolleri ${p.name} oyuncusunda.`;
+                    : `Sıra sende değil • 🗺️ Haritada serbestçe gezinebilir ve hücreleri inceleyebilirsin.`;
                 btnsEl.innerHTML = `
                     <span class="px-3 py-1.5 rounded-lg text-xs font-bold border ${waitingForCommit
                         ? 'bg-amber-950/90 text-amber-200 border-amber-500/60'
                         : 'bg-rose-950/90 text-rose-200 border-rose-500/70'}">
-                        ${waitingForCommit ? '⏳ HAMLE ONAYLANIYOR' : `🔴 SIRA ${p.name.toLocaleUpperCase('tr-TR')} OYUNCUSUNDA`}
+                        ${waitingForCommit ? '⏳ HAMLE ONAYLANIYOR' : `👁️ İZLEME MODU • SIRA: ${p.name.toLocaleUpperCase('tr-TR')}`}
                     </span>
                 `;
                 return;
@@ -9888,11 +10455,11 @@
                     <button onclick="trainNewArmy()" ${!canTrainArmy ? 'disabled' : ''} class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/40 disabled:opacity-40">
                         ⚔️ Ordu (${armyCost.gold}A,${armyCost.wood}O,${armyCost.iron}D${armyCost.discounted ? ' 🏷️%50' : ''})
                     </button>
-                    <button onclick="openTradeModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30">
+                    <button data-multiplayer-event="trade" onclick="openTradeModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30">
                         🤝 Ticaret
                     </button>
-                    <button onclick="goToPhase3Movement()" class="gold-btn text-white font-bold py-1.5 px-3.5 rounded-lg text-xs">
-                        🎲 Zar Aşaması →
+                    <button onclick="goToPhase3Movement()" class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs">
+                        🎲 Zar Aşamasına Geç →
                     </button>
                 `;
             }
@@ -9906,18 +10473,18 @@
 
                     titleEl.textContent = allArmiesFrozen
                         ? `❄️ Adım 3: Ordular Sabit (1 Tur Bekleme)`
-                        : `🎲 Adım 3: Hareket Zarı${rollMods.length > 0 ? ` (${rollMods.join(' • ')})` : ''}`;
+                        : `🎲 ADIM 3: HAREKET ZARI AŞAMASI!${rollMods.length > 0 ? ` (${rollMods.join(' • ')})` : ''}`;
                     subEl.textContent = allArmiesFrozen
                         ? `Tüm ordularınız bu tur sabit durumda. Doğrudan Eylem aşamasına geçebilirsiniz.`
-                        : `Ordularınızı ilerletmek için zar atın.`;
+                        : `Hareket puanı (AP) kazanmak ve ordularını yürütmek için zar at!`;
                     btnsEl.innerHTML = `
                         ${allArmiesFrozen ? `
-                            <button onclick="skipFrozenMovementPhase()" class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs">
+                            <button onclick="skipFrozenMovementPhase()" class="gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs sm:text-sm">
                                 ⏭️ Sabit Kal ve Eylem Aşamasına Geç →
                             </button>
                         ` : `
-                            <button data-multiplayer-event="dice" onclick="rollMovementDice()" class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs">
-                                ${p.activeRollTwoLowestThisTurn ? '😴🎲 2 Zar At (En Düşüğü)' : '🎲 Zar At (1-6)'}${p.ebeleBonusMove > 0 ? ` +${p.ebeleBonusMove}` : ''}
+                            <button data-multiplayer-event="dice" onclick="rollMovementDice()" class="gold-btn dice-ready-pulse text-white font-extrabold py-2.5 px-6 rounded-xl text-xs sm:text-sm tracking-wide">
+                                ${p.activeRollTwoLowestThisTurn ? '😴🎲 2 ZAR AT (EN DÜŞÜĞÜ)' : '🎲 HAREKET ZARINI AT (1-6)'}${p.ebeleBonusMove > 0 ? ` +${p.ebeleBonusMove}` : ''}
                             </button>
                         `}
                     `;
@@ -9926,10 +10493,12 @@
                     const max3Note = p.activeMaxSteps3ThisTurn ? ' • 🌧️ Maks 3 Hücre' : '';
                     titleEl.textContent = secretPathStepsMode
                         ? `🌿 Gizli Patika Hareketi (${p.remainingAP} Hücre Hakkı Kaldı)`
-                        : `🏃 Hareket (${p.remainingAP} AP Kaldı | Zar: ${p.diceRoll}${max3Note})`;
+                        : `🏃 Adım 3: Hareket Et — ${p.remainingAP} / ${p.diceRoll} AP Kaldı${max3Note}`;
                     subEl.textContent = secretPathStepsMode
                         ? `Buraları dutluk sanardık: Sarı hücrelere tıklayarak 3 hücre ilerleyin ve Onayla'ya basın.`
-                        : `Sarı hücrelere tıklayın veya hareketi onaylayın.`;
+                        : (!hasMovedAny && p.remainingAP > 0
+                            ? `⚠️ Henüz hareket etmedin! Haritada sarı parlayan hücrelere tıklayarak ordunu yürüt.`
+                            : `Kalan puanınla yürümeye devam edebilir veya hareketi onaylayıp Eylem aşamasına geçebilirsin.`);
 
                     let armySwitchHtml = '';
                     p.armies.forEach((a, idx) => {
@@ -9941,14 +10510,20 @@
                         `;
                     });
 
+                    const confirmMoveBtnHtml = (!hasMovedAny && p.remainingAP > 0)
+                        ? `<button data-multiplayer-event="move_confirm" onclick="completeMovementPhase()" ${isPawnAnimating ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-amber-900/70 text-amber-300 border border-amber-500/60 disabled:opacity-40">
+                                ⏭️ Hareket Etmeden Geç
+                           </button>`
+                        : `<button onclick="completeMovementPhase()" ${isPawnAnimating ? 'disabled' : ''} class="gold-btn text-white font-bold py-1.5 px-4 rounded-lg text-xs shadow-lg">
+                                ✅ Hareketi Onayla →
+                           </button>`;
+
                     btnsEl.innerHTML = `
                         ${armySwitchHtml}
                         <button onclick="resetTurnMovement()" ${(!hasMovedAny || isPawnAnimating) ? 'disabled' : ''} class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-500/40 disabled:opacity-40">
                             ↩️ Sıfırla
                         </button>
-                        <button onclick="completeMovementPhase()" ${isPawnAnimating ? 'disabled' : ''} class="gold-btn text-white font-bold py-1.5 px-3.5 rounded-lg text-xs">
-                            ✅ Onayla →
-                        </button>
+                        ${confirmMoveBtnHtml}
                     `;
                 }
             }
@@ -10042,7 +10617,7 @@
                     ${armySwitchHtml}
                     ${wallAndArmyBtns}
                     ${actionBtnHtml}
-                    <button onclick="openTradeModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30">
+                    <button data-multiplayer-event="trade" onclick="openTradeModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30">
                         🤝 Ticaret
                     </button>
                     <button onclick="endTurn()" class="gold-btn text-white font-bold py-1.5 px-3.5 rounded-lg text-xs">
@@ -10217,6 +10792,7 @@
         // =========================================================================
         function handleCanvasInteraction(worldX, worldY) {
             if (gameState === 'PREVIEW' || isPawnAnimating) return;
+            if (multiplayerSession && (multiplayerArena || multiplayerHodriDuel || !multiplayerCanAct())) return;
             const p = getActivePlayer();
             if (!p) return;
 
@@ -11247,21 +11823,26 @@
                 const t = pt.progress;
                 // Parabolik kavisli uçuş eğrisi
                 const curX = pt.startX + (pt.targetX - pt.startX) * t;
-                const curY = pt.startY + (pt.targetY - pt.startY) * t - Math.sin(t * Math.PI) * 65;
+                const curY = pt.startY + (pt.targetY - pt.startY) * t - Math.sin(t * Math.PI) * 78;
 
                 ctx.save();
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+                ctx.shadowColor = pt.color;
+                ctx.shadowBlur = 14;
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
                 ctx.strokeStyle = pt.color;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2.5;
+                const badgeText = `${pt.icon} ${pt.label}`;
+                ctx.font = 'bold 14px Inter';
+                const textW = Math.max(66, ctx.measureText(badgeText).width + 20);
                 ctx.beginPath();
-                ctx.roundRect(curX - 26, curY - 14, 52, 26, 12);
+                ctx.roundRect(curX - textW / 2, curY - 16, textW, 32, 14);
                 ctx.fill();
                 ctx.stroke();
 
+                ctx.shadowBlur = 0;
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 12px Inter';
                 ctx.textAlign = 'center';
-                ctx.fillText(`${pt.icon}${pt.label}`, curX, curY + 4);
+                ctx.fillText(badgeText, curX, curY + 5);
                 ctx.restore();
             }
         }
@@ -11350,11 +11931,73 @@
                 document.getElementById('tt-title').textContent = `${hex.type} (${hex.q}, ${hex.r})`;
                 document.getElementById('tt-desc').textContent = TERRAIN_INFO[hex.type].label;
 
-                let extra = '';
+                const viewerPlayer = multiplayerSession
+                    ? (players.find(pl => pl.peerId === multiplayerPeerId) || getActivePlayer())
+                    : getActivePlayer();
+                const escHtml = val => String(val ?? '').replace(/[&<>"']/g, ch => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[ch]);
+
+                const extraRows = [];
                 if (hex.poi) {
-                    const label = hex.poi === 'STRONGHOLD_PLOT' ? 'Şehir / Kale Noktası' : hex.poi;
-                    const ownerName = hex.buildingOwner !== null && players[hex.buildingOwner] ? players[hex.buildingOwner].name : 'Sahipsiz';
-                    extra += `📍 ${label} (${ownerName}) `;
+                    const labelMap = {
+                        STRONGHOLD_PLOT: 'Şehir / Kale Noktası',
+                        Şehir: 'Ana Şehir',
+                        Kale: 'Kale',
+                        Maden: 'Maden Ocağı',
+                        Oduncu: 'Oduncu Kulübesi',
+                        Sans: 'Şans Hücresi (?)'
+                    };
+                    const poiLabel = labelMap[hex.poi] || hex.poi;
+                    const ownerObj = hex.buildingOwner !== null && players[hex.buildingOwner] ? players[hex.buildingOwner] : null;
+                    const ownerTag = ownerObj
+                        ? `<span class="font-bold" style="color:${ownerObj.color}">${escHtml(ownerObj.name)}</span>`
+                        : (hex.banditOccupied ? '<span class="text-rose-300 font-bold">🏴‍☠️ Haydut İşgalinde</span>' : '<span class="text-slate-300">Sahipsiz</span>');
+                    extraRows.push(`<div>📍 <b>${poiLabel}</b> • ${ownerTag}</div>`);
+
+                    if (hex.poi === 'Oduncu') {
+                        if (!ownerObj && !hex.banditOccupied) {
+                            const cost = getEffectiveBuildingCost(viewerPlayer, 'Oduncu') || BUILDING_COSTS.Oduncu;
+                            extraRows.push(`<div class="text-emerald-300">🏗️ <b>Kurma:</b> ${cost.gold}🪙 ${cost.wood}🪵 ${cost.iron}⛏️${cost.discounted ? ' <span class="text-indigo-300">(🏷️%50 İndirim)</span>' : ''}</div>`);
+                            extraRows.push(`<div class="text-slate-200">📈 <b>Gelir:</b> +1🪵/Tur <span class="text-amber-300">(Güvenli: +2🪵)</span></div>`);
+                            extraRows.push(`<div class="text-rose-300">🔥 <b>Yağma:</b> Anında <b>+3🪵 Odun</b> (Nokta tükenir)</div>`);
+                        } else if (hex.banditOccupied) {
+                            extraRows.push(`<div class="text-amber-300">⚔️ İlk ulaşan ordu bedelsiz ele geçirir (+1🪵/Tur)!</div>`);
+                        } else {
+                            extraRows.push(`<div class="text-emerald-300">📈 <b>Gelir:</b> ${hex.isSafeZone ? '+2🪵/Tur (🛡️ 2x Güvenli Bölge)' : '+1🪵/Tur'}</div>`);
+                        }
+                    } else if (hex.poi === 'Maden') {
+                        if (!ownerObj && !hex.banditOccupied) {
+                            const cost = getEffectiveBuildingCost(viewerPlayer, 'Maden') || BUILDING_COSTS.Maden;
+                            extraRows.push(`<div class="text-sky-300">🏗️ <b>Kurma:</b> ${cost.gold}🪙 ${cost.wood}🪵 ${cost.iron}⛏️${cost.discounted ? ' <span class="text-indigo-300">(🏷️%50 İndirim)</span>' : ''}</div>`);
+                            extraRows.push(`<div class="text-slate-200">📈 <b>Gelir:</b> +1⛏️/Tur <span class="text-amber-300">(Güvenli: +2⛏️)</span></div>`);
+                            extraRows.push(`<div class="text-rose-300">🔥 <b>Yağma:</b> Anında <b>+3⛏️ Demir</b> (Nokta tükenir)</div>`);
+                        } else if (hex.banditOccupied) {
+                            extraRows.push(`<div class="text-amber-300">⚔️ İlk ulaşan ordu bedelsiz ele geçirir (+1⛏️/Tur)!</div>`);
+                        } else {
+                            extraRows.push(`<div class="text-sky-300">📈 <b>Gelir:</b> ${hex.isSafeZone ? '+2⛏️/Tur (🛡️ 2x Güvenli Bölge)' : '+1⛏️/Tur'}</div>`);
+                        }
+                    } else if (hex.poi === 'STRONGHOLD_PLOT') {
+                        if (gameState === 'PREVIEW' || gameState === 'SETUP_CITY') {
+                            extraRows.push(`<div class="text-amber-300">🏰 Başlangıç Ana Şehri kurulabilir (+2🪙 Altın/Tur)</div>`);
+                        } else {
+                            const cost = getEffectiveBuildingCost(viewerPlayer, 'Kale') || BUILDING_COSTS.Kale;
+                            extraRows.push(`<div class="text-amber-300">🏗️ <b>Kale Kurma:</b> ${cost.gold}🪙 ${cost.wood}🪵 ${cost.iron}⛏️${cost.discounted ? ' <span class="text-indigo-300">(🏷️%50 İndirim)</span>' : ''}</div>`);
+                            extraRows.push(`<div class="text-slate-200">📈 <b>Gelir:</b> +3🪙/Tur <span class="text-amber-300">(Güvenli: +6🪙)</span></div>`);
+                        }
+                    } else if (hex.poi === 'Kale') {
+                        extraRows.push(`<div class="text-amber-300">📈 <b>Gelir:</b> ${hex.isSafeZone ? '+6🪙/Tur (🛡️ 2x Güvenli Bölge)' : '+3🪙/Tur'}</div>`);
+                    } else if (hex.poi === 'Şehir') {
+                        const armyCost = getEffectiveArmyCost(viewerPlayer);
+                        extraRows.push(`<div class="text-amber-300">📈 <b>Gelir:</b> +2🪙 Altın/Tur (Sabit)</div>`);
+                        extraRows.push(`<div class="text-indigo-300">⚔️ <b>Yeni Ordu:</b> ${armyCost.gold}🪙 ${armyCost.wood}🪵 ${armyCost.iron}⛏️</div>`);
+                    } else if (hex.poi === 'Sans') {
+                        extraRows.push(`<div class="text-purple-300">✨ Hareketi burada onaylayınca Kader Kartı açılır!</div>`);
+                    }
+
+                    if (hex.disabledIncomeTurns > 0) {
+                        extraRows.push(`<div class="text-rose-400">🔥 Harap Edilmiş (${hex.disabledIncomeTurns} tur gelir üretmez)</div>`);
+                    }
                 }
                 if (hex.archetype && (gameState === 'PREVIEW' || gameState === 'SETUP_CITY')) {
                     const archNames = {
@@ -11362,22 +12005,34 @@
                         'RESOURCE_RICH': '💎 Zengin Vadi (Oduncu + Maden Yakın)',
                         'CHANCE_HUB': '❓ Şans Kavşağı (Şans Hücresi + Kaynak)'
                     };
-                    extra += `| ${archNames[hex.archetype]} `;
+                    extraRows.push(`<div class="text-emerald-300">${archNames[hex.archetype]}</div>`);
                 }
-                if (hex.isSafeZone) {
-                    extra += `| 🛡️ Güvenli Bölge (2x Gelir Aktif!) `;
+                if (hex.isSafeZone && !['Oduncu', 'Maden', 'Kale', 'Şehir'].includes(hex.poi)) {
+                    extraRows.push(`<div class="text-amber-300">🛡️ Güvenli Bölge (2x Gelir Alanı)</div>`);
+                }
+                const armiesHere = [];
+                players.forEach(pl => {
+                    if (pl.eliminated) return;
+                    pl.armies.forEach((a, aIdx) => {
+                        if (a.q === hex.q && a.r === hex.r) {
+                            armiesHere.push(`<span style="color:${pl.color}">${escHtml(pl.name)} #${aIdx + 1}${a.frozenTurns > 0 ? '❄️' : ''}</span>`);
+                        }
+                    });
+                });
+                if (armiesHere.length > 0) {
+                    extraRows.push(`<div class="text-slate-200">⚔️ <b>Ordular:</b> ${armiesHere.join(', ')}</div>`);
                 }
                 if (hoveredEdgeKey && (gameState === 'SETUP_WALLS' || subMode === 'BUILD_WALL')) {
                     const check = isEdgeTerrainValidForWall(hoveredEdgeKey);
-                    if (!check.valid) extra += `| 🚫 ${check.reason}`;
+                    if (!check.valid) extraRows.push(`<div class="text-rose-400">🚫 ${escHtml(check.reason)}</div>`);
                 }
                 if (hoveredEdgeKey && walls.has(hoveredEdgeKey)) {
                     const w = walls.get(hoveredEdgeKey);
                     if (players[w.ownerId]) {
-                        extra += `| 🧱 Kenar Duvarı: ${players[w.ownerId].name}`;
+                        extraRows.push(`<div class="text-sky-200">🧱 <b>Kenar Duvarı:</b> ${escHtml(players[w.ownerId].name)}${w.passableTurns > 0 ? ' (🔥 1 tur geçilebilir)' : ''}</div>`);
                     }
                 }
-                document.getElementById('tt-extra').textContent = extra;
+                document.getElementById('tt-extra').innerHTML = extraRows.join('');
             } else {
                 hoveredHex = null;
                 tt.classList.add('hidden');
@@ -11446,7 +12101,7 @@
         });
 
         const multiplayerModalIds = [
-            'initiative-modal', 'combat-modal', 'chance-modal', 'dice-anim-overlay', 'income-banner',
+            'initiative-modal', 'combat-modal', 'chance-modal', 'dice-anim-overlay',
             'rules-modal', 'victory-modal'
         ];
         const multiplayerSeenMessages = new Set();
@@ -11454,7 +12109,7 @@
         const multiplayerSfxEffects = new Set([
             'step', 'reset', 'city', 'wall_build', 'wall_shift', 'build', 'loot', 'chance', 'whip',
             'feast', 'trade', 'income', 'dice_tick', 'dice_done', 'army', 'combat_start', 'card_flip',
-            'combat_win', 'combat_lose', 'victory', 'error', 'click'
+            'combat_win', 'combat_lose', 'victory', 'error', 'click', 'turn_start'
         ]);
 
         function setMultiplayerNotice(message, tone = 'slate') {
@@ -11485,12 +12140,19 @@
                 activeChanceContext?.currentCardIndex === CHANCE_CARDS_DB.findIndex(card =>
                     card.id === 'pos_31_high_roll_duel_2g')) return true;
             if (target.closest('#trade-modal')) {
-                return !!multiplayerTradeNegotiation &&
+                const isParticipant = !!multiplayerTradeNegotiation &&
                     (multiplayerTradeNegotiation.peerA === multiplayerPeerId ||
                         multiplayerTradeNegotiation.peerB === multiplayerPeerId);
+                const isActiveOpeningTrade = !document.getElementById('trade-modal').classList.contains('hidden') &&
+                    players[activePlayerIndex]?.peerId === multiplayerPeerId;
+                return isParticipant || isActiveOpeningTrade;
             }
+            if (target.closest('#confirm-skip-move-modal')) return true;
+            if (target.closest('#rules-modal')) return true;
+            if (target.closest('#hud-camera-controls')) return true;
+            if (target.closest('#left-sidebar .window-toggle-btn')) return true;
             return !!target.closest(
-                '#multiplayer-chat-panel, #multiplayer-chat-toggle, #multiplayer-settings-modal, #game-settings-toggle'
+                '#multiplayer-chat-panel, #multiplayer-chat-toggle, #multiplayer-settings-modal, #game-settings-toggle, #sound-toggle-btn'
             );
         }
 
@@ -11499,7 +12161,16 @@
         }
 
         function publishMultiplayerActionEvent(actionType, details) {
-            if (!multiplayerSession || players[activePlayerIndex]?.peerId !== multiplayerPeerId) return;
+            if (!multiplayerSession) return;
+            const isActivePeer = players[activePlayerIndex]?.peerId === multiplayerPeerId;
+            const isCombatPeer = currentCombat && (
+                currentCombat.attacker?.peerId === multiplayerPeerId ||
+                currentCombat.defender?.peerId === multiplayerPeerId
+            );
+            const allowed = actionType === 'COMBAT_CARD_SFX'
+                ? (isActivePeer || isCombatPeer || multiplayerIsHost)
+                : (actionType === 'SFX' && isCombatPeer ? true : isActivePeer);
+            if (!allowed) return;
             const packet = {
                 type: 'MULTIPLAYER_ACTION_EVENT',
                 actionType,
@@ -11514,9 +12185,21 @@
         function isValidMultiplayerActionEvent(packet, authenticatedPeerId) {
             const activePlayer = players[activePlayerIndex];
             if (typeof packet.eventId !== 'string' || !packet.eventId || packet.eventId.length > 128 ||
-                packet.peerId !== authenticatedPeerId || !activePlayer ||
-                activePlayer.peerId !== authenticatedPeerId) return false;
-            if (packet.actionType === 'SFX') return multiplayerSfxEffects.has(packet.effect);
+                packet.peerId !== authenticatedPeerId || !activePlayer) return false;
+            const isCombatParticipant = currentCombat && (
+                currentCombat.attacker?.peerId === authenticatedPeerId ||
+                currentCombat.defender?.peerId === authenticatedPeerId
+            );
+            if (packet.actionType === 'COMBAT_CARD_SFX') {
+                const validCards = new Set(['KILL_DEFENDER', 'KILL_ATTACKER', 'REPEL_ATTACKER', 'DRAW_1', 'DRAW_2', 'OPPORTUNITY', 'RAVAGE', 'LIFESAVER_USED']);
+                return (activePlayer.peerId === authenticatedPeerId || isCombatParticipant) &&
+                    validCards.has(packet.cardId);
+            }
+            if (packet.actionType === 'SFX') {
+                return (activePlayer.peerId === authenticatedPeerId || isCombatParticipant) &&
+                    multiplayerSfxEffects.has(packet.effect);
+            }
+            if (activePlayer.peerId !== authenticatedPeerId) return false;
             if (packet.actionType === 'PAWN_MOVE') {
                 const army = activePlayer.armies[packet.armyIndex];
                 return Number.isSafeInteger(packet.playerId) &&
@@ -11553,6 +12236,8 @@
             }
             if (packet.actionType === 'SFX') {
                 playSFX(packet.effect, false);
+            } else if (packet.actionType === 'COMBAT_CARD_SFX') {
+                playCombatCardSFX(packet.cardId, packet.attackerPeerId, packet.defenderPeerId, false, packet.savedPeerId);
             } else if (packet.actionType === 'PAWN_MOVE') {
                 animateRemotePawnPath(packet);
             } else if (packet.actionType === 'CHANCE_CARD_REVEAL') {
@@ -11744,6 +12429,7 @@
                 } : null,
                 multiplayerArena,
                 multiplayerHodriDuel,
+                lastTurnIncomeEvent,
                 currentCombat: currentCombat ? {
                     attackerId: currentCombat.attacker.id,
                     defenderId: currentCombat.defender.id,
@@ -11918,6 +12604,16 @@
                     updateCombatRoleControls();
                 }
                 if (multiplayerArena) renderMultiplayerArena();
+                syncCombatMusicPlayback();
+                if (snapshot.lastTurnIncomeEvent && snapshot.lastTurnIncomeEvent.key &&
+                    snapshot.lastTurnIncomeEvent.key !== lastShownIncomeEventKey) {
+                    lastTurnIncomeEvent = snapshot.lastTurnIncomeEvent;
+                    lastShownIncomeEventKey = snapshot.lastTurnIncomeEvent.key;
+                    const incPlayer = players.find(item => item.id === snapshot.lastTurnIncomeEvent.playerId);
+                    if (incPlayer) {
+                        playTurnIncomeAnimation(incPlayer, snapshot.lastTurnIncomeEvent, snapshot.lastTurnIncomeEvent.turnNumber);
+                    }
+                }
                 updateUI();
                 drawMap();
                 if (!multiplayerArena && activeChanceContext &&
@@ -12008,17 +12704,26 @@
 
         function sendReliableMultiplayerPacket(packet) {
             const connection = multiplayerClientConnection;
-            if (!connection || !connection.open) return false;
             packet.sender = multiplayerPeerId;
             packet.msgId = `${multiplayerPeerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             multiplayerSeenMessages.add(packet.msgId);
-            try {
-                connection.send(packet);
-                return true;
-            } catch (error) {
-                console.error('Reliable multiplayer packet could not be sent.', error);
-                return false;
+            if (connection && connection.open) {
+                try {
+                    connection.send(packet);
+                    return true;
+                } catch (error) {
+                    console.error('Reliable multiplayer packet could not be sent.', error);
+                }
             }
+            if (multiplayerChannel) {
+                try {
+                    multiplayerChannel.postMessage(packet);
+                    return true;
+                } catch (error) {
+                    console.error('BroadcastChannel fallback failed.', error);
+                }
+            }
+            return false;
         }
 
         function sendMultiplayerTradePacket(packet) {
@@ -12078,6 +12783,8 @@
                     clearPendingMultiplayerTradeOffer();
                 }
                 const previousSession = multiplayerTradeNegotiation;
+                const tradeModalEl = document.getElementById('trade-modal');
+                const modalWasHidden = tradeModalEl.classList.contains('hidden');
                 const isNewSession = !previousSession || previousSession.sessionId !== session.sessionId;
                 const stageChanged = previousSession?.status !== session.status;
                 const offerFormIsStillHidden = session.status === 'active' &&
@@ -12085,12 +12792,15 @@
                 multiplayerTradeNegotiation = session;
                 if (session.offers?.[multiplayerPeerId]) multiplayerTradeOfferEditing = false;
                 clearPendingTradeInvite();
-                if (isNewSession) {
-                    resetTradeOfferInputs();
-                    document.getElementById('trade-modal').classList.remove('hidden');
+                if (isNewSession || modalWasHidden) {
+                    if (isNewSession) resetTradeOfferInputs();
+                    tradeModalEl.classList.remove('hidden');
                     renderTradeSessionStage(session.status !== 'pending_accept');
                     const other = getTradeCounterparty();
-                    if (other) setMultiplayerNotice(`${other.name} ile ticaret görüşmesi başladı.`, 'amber');
+                    if (isNewSession && session.peerB === multiplayerPeerId && session.status === 'pending_accept') {
+                        playSFX('trade', false);
+                    }
+                    if (other) setMultiplayerNotice(`🤝 ${other.name} ile ticaret görüşmesi başladı.`, 'amber');
                 } else if (stageChanged || offerFormIsStillHidden) {
                     renderTradeSessionStage(session.status !== 'pending_accept');
                 } else {
@@ -12147,13 +12857,14 @@
 
             if (packet.type === 'TRADE_INVITE') {
                 const activePlayer = players[activePlayerIndex];
-                const target = players.find(player => player.peerId === packet.toPeerId && !player.eliminated);
+                const invitedPeerId = packet.targetPeerId || packet.toPeerId;
+                const target = players.find(player => player.peerId === invitedPeerId && !player.eliminated);
                 if (!activePlayer || activePlayer.peerId !== authenticatedPeerId || !target ||
-                    target.peerId === authenticatedPeerId || multiplayerTradeNegotiation) {
+                    target.peerId === authenticatedPeerId || multiplayerHostTradeSession) {
                     sendTradeMessageToPeer(authenticatedPeerId, {
                         type: 'TRADE_SESSION_REJECTED',
                         sessionId: packet.sessionId,
-                        message: multiplayerTradeNegotiation
+                        message: multiplayerHostTradeSession
                             ? 'Başka bir ticaret görüşmesi zaten devam ediyor.'
                             : 'Bu davet şu anda gönderilemiyor.'
                     });
@@ -12168,12 +12879,12 @@
                     approvals: {}
                 };
                 if (!session.sessionId) return;
-                multiplayerTradeNegotiation = session;
+                multiplayerHostTradeSession = session;
                 publishTradeSession(session);
                 return;
             }
 
-            const session = multiplayerTradeNegotiation;
+            const session = multiplayerHostTradeSession;
             if (!session || session.sessionId !== packet.sessionId ||
                 (authenticatedPeerId !== session.peerA && authenticatedPeerId !== session.peerB)) {
                 if (packet.type === 'TRADE_OFFER' || packet.type === 'TRADE_APPROVE') {
@@ -12195,13 +12906,13 @@
 
             if (packet.type === 'TRADE_DECLINE') {
                 if (authenticatedPeerId !== session.peerB || session.status !== 'pending_accept') return;
-                multiplayerTradeNegotiation = null;
+                multiplayerHostTradeSession = null;
                 publishTradeSession(session, 'TRADE_SESSION_FINISHED', 'Ticaret daveti karşı tarafça reddedildi.');
                 return;
             }
 
             if (packet.type === 'TRADE_CANCEL') {
-                multiplayerTradeNegotiation = null;
+                multiplayerHostTradeSession = null;
                 publishTradeSession(session, 'TRADE_SESSION_FINISHED', 'Ticaret görüşmesi iptal edildi.');
                 return;
             }
@@ -12242,7 +12953,7 @@
                     return;
                 }
                 const completed = commitMultiplayerTrade(session);
-                multiplayerTradeNegotiation = null;
+                multiplayerHostTradeSession = null;
                 publishTradeSession(session, 'TRADE_SESSION_FINISHED', completed
                     ? 'İki taraf da teklifi onayladı; takas tamamlandı.'
                     : 'Takas tamamlanamadı; oyuncuların varlıkları değişmiş olabilir.');
@@ -12393,7 +13104,7 @@
 
         function handleMultiplayerPacket(packet, connection = null) {
             if (!packet || !packet.type || packet.sender === multiplayerPeerId) return;
-            if (packet.toPeerId && packet.toPeerId !== multiplayerPeerId) return;
+            if (packet.toPeerId && packet.toPeerId !== multiplayerPeerId && !(multiplayerIsHost && packet.type === 'TRADE_INVITE')) return;
             if (packet.excludePeerId === multiplayerPeerId) return;
             if (packet.msgId && multiplayerSeenMessages.has(packet.msgId)) return;
             if (packet.msgId) multiplayerSeenMessages.add(packet.msgId);
@@ -12802,6 +13513,7 @@
                 multiplayerChannel.onmessage = event => handleMultiplayerPacket(event.data);
             }
             document.addEventListener('click', event => {
+                if (event.target === canvas || event.target instanceof Element && event.target.closest('#canvas-container')) return;
                 if (isMultiplayerUiTarget(event.target)) return;
                 if (multiplayerArena ||
                     (multiplayerHodriDuel && !isMultiplayerUiTarget(event.target)) ||
@@ -12819,6 +13531,8 @@
             }, true);
             ['mousedown', 'touchstart'].forEach(eventName => {
                 document.addEventListener(eventName, event => {
+                    // Sıra bizde olmasa bile haritada sürükleyip gezinebilmeye ve yakınlaştırmaya izin ver
+                    if (event.target === canvas || (event.target instanceof Element && event.target.closest('#canvas-container'))) return;
                     if (isMultiplayerUiTarget(event.target)) return;
                     if (multiplayerArena ||
                         (multiplayerHodriDuel && !isMultiplayerUiTarget(event.target)) ||
@@ -12831,7 +13545,7 @@
             ['mouseup', 'touchend'].forEach(eventName => {
                 document.addEventListener(eventName, event => {
                     if (isMultiplayerUiTarget(event.target)) return;
-                    if (multiplayerArena) return;
+                    if (multiplayerArena || multiplayerHodriDuel) return;
                     if (!multiplayerCanAct()) return;
                     multiplayerActionAuthorized = true;
                     if (!isMultiplayerEventTarget(event.target)) {
