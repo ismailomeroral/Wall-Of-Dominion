@@ -1,2534 +1,370 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Walls of Dominion — Çevrimiçi Oda</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="alternate icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpolygon points='32,4 56,18 56,46 32,60 8,46 8,18' fill='%230f172a' stroke='%23f59e0b' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M18 22 H24 V27 H29 V22 H35 V27 H40 V22 H46 V46 H18 Z' fill='%23f59e0b'/%3E%3Cpath d='M27 46 V37 C27 33.5 37 33.5 37 37 V46 Z' fill='%230f172a'/%3E%3C/svg%3E">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PeerJS: GitHub Pages üzerinde sunucusuz (P2P WebRTC) oda kurmak için -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #090d16;
-            color: #f8fafc;
-            overflow: hidden;
-            user-select: none;
-        }
-        .font-medieval {
-            font-family: 'Cinzel', serif;
-        }
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.90);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(251, 191, 36, 0.28);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
-        }
-        .gold-btn {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
-            border: 1px solid #fde68a;
-            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
-            transition: all 0.2s ease;
-        }
-        .gold-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.55);
-            filter: brightness(1.08);
-        }
-        .gold-btn:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-            filter: grayscale(0.4);
-        }
-        @keyframes diceTumble {
-            0% { transform: rotate(0deg) scale(0.9); }
-            25% { transform: rotate(-18deg) scale(1.12); }
-            50% { transform: rotate(18deg) scale(1.05); }
-            75% { transform: rotate(-10deg) scale(1.1); }
-            100% { transform: rotate(0deg) scale(1); }
-        }
-        .dice-rolling {
-            animation: diceTumble 0.22s infinite ease-in-out;
-        }
-        @keyframes floatReaction {
-            0% { transform: translateY(0) scale(0.7); opacity: 0; }
-            20% { transform: translateY(-12px) scale(1.15); opacity: 1; }
-            80% { transform: translateY(-42px) scale(1); opacity: 1; }
-            100% { transform: translateY(-60px) scale(0.9); opacity: 0; }
-        }
-        .floating-reaction {
-            animation: floatReaction 2.2s ease-out forwards;
-        }
-        .av-pill {
-            padding: 4px 9px;
-            border-radius: 8px;
-            border: 1px solid rgba(71, 85, 105, 0.7);
-            background: rgba(15, 23, 42, 0.9);
-            color: #cbd5e1;
-            font-size: 11px;
-            font-weight: 600;
-            transition: all 0.14s ease;
-        }
-        .av-pill:hover {
-            border-color: rgba(251, 191, 36, 0.55);
-            color: #fef3c7;
-        }
-        .av-pill-active {
-            border-color: #fbbf24;
-            background: rgba(245, 158, 11, 0.18);
-            color: #fde68a;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.22);
-        }
-        .av-swatch {
-            width: 26px;
-            height: 26px;
-            border-radius: 9999px;
-            border: 2px solid rgba(255, 255, 255, 0.25);
-            transition: transform 0.14s ease, box-shadow 0.14s ease;
-        }
-        .av-swatch:hover { transform: scale(1.1); }
-        .av-swatch-active {
-            transform: scale(1.12);
-            border-color: #ffffff;
-            box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px #fbbf24;
-        }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #fbbf24; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oyun Merkezi — Walls of Dominion &amp; Baronia</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpolygon points='32,4 58,18 58,46 32,60 6,46 6,18' fill='%230a101d' stroke='%23f59e0b' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M22 39 L26 24 L32 30 L38 24 L42 39 Z' fill='%23f59e0b'/%3E%3Crect x='22' y='41' width='20' height='3.5' rx='1.75' fill='%23fde68a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #070b14;
+      --surface: rgba(15, 23, 42, 0.78);
+      --surface-hover: rgba(20, 30, 54, 0.92);
+      --border: rgba(251, 191, 36, 0.22);
+      --border-strong: rgba(251, 191, 36, 0.55);
+      --gold: #f59e0b;
+      --gold-light: #fde68a;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background glow */
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(245, 158, 11, 0.14), transparent 42%),
+        radial-gradient(circle at 82% 24%, rgba(56, 189, 248, 0.12), transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(16, 185, 129, 0.08), transparent 48%);
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 1020px;
+    }
+
+    /* Header */
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      color: var(--gold-light);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .hero-badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 10px #34d399;
+    }
+
+    .hero h1 {
+      font-family: 'Cinzel', Georgia, serif;
+      font-size: clamp(2rem, 5vw, 3.1rem);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      background: linear-gradient(135deg, #fef08a 0%, #f59e0b 55%, #d97706 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 15px;
+      max-width: 540px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Game cards grid */
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 24px;
+    }
+
+    .game-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--surface);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+      overflow: hidden;
+    }
+
+    .game-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(145deg, rgba(251, 191, 36, 0.08), transparent 55%);
+      opacity: 0;
+      transition: opacity 0.22s ease;
+      pointer-events: none;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-strong);
+      background: var(--surface-hover);
+      box-shadow: 0 22px 48px rgba(0, 0, 0, 0.65), 0 0 28px rgba(245, 158, 11, 0.12);
+    }
+
+    .game-card:hover::before {
+      opacity: 1;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .game-icon {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      border-radius: 18px;
+      background: rgba(7, 11, 20, 0.85);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .game-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .game-title {
+      font-family: 'Cinzel', Georgia, serif;
+      font-size: 1.38rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+    }
+
+    .game-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold-light);
+      margin-top: 4px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .game-desc {
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.65;
+      margin-bottom: 18px;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      color: #cbd5e1;
+    }
+
+    .tag.accent {
+      background: rgba(16, 185, 129, 0.14);
+      border-color: rgba(52, 211, 153, 0.35);
+      color: #6ee7b7;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px 18px;
+      border-radius: 14px;
+      transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      flex: 1 1 180px;
+      color: #0b0f19;
+      background: linear-gradient(135deg, #fde047 0%, #f59e0b 55%, #d97706 100%);
+      border: 1px solid #fef08a;
+      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.32);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.48);
+    }
+
+    .btn-secondary {
+      flex: 0 1 auto;
+      color: #e2e8f0;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.32);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(251, 191, 36, 0.45);
+      color: #fef3c7;
+    }
+
+    .footer {
+      margin-top: 36px;
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    @media (max-width: 480px) {
+      .game-card {
+        padding: 22px;
+      }
+      .btn-secondary {
+        flex: 1 1 100%;
+      }
+    }
+  </style>
 </head>
-<body class="w-screen h-screen relative">
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
 
-    <!-- ARKA PLAN HARİTA CANVAS -->
-    <canvas id="gameCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+  <main class="container">
+    <header class="hero">
+      <div class="hero-badge">
+        <span class="dot" aria-hidden="true"></span>
+        Tarayıcı Oyun Koleksiyonu
+      </div>
+      <h1>OYUN MERKEZİ</h1>
+      <p>Oynamak istediğin oyunu seç, online oda kurup arkadaşlarınla ya da tek başına anında başla.</p>
+    </header>
 
-    <!-- UÇAN EMOJİ / REAKSİYON KATMANI -->
-    <div id="reactions-layer" class="fixed inset-0 pointer-events-none z-50 overflow-hidden"></div>
-
-    <!-- ZAR ATMA ANİMASYON MODALI (TÜM OYUNCULARDA EŞZAMANLI AÇILIR) -->
-    <div id="dice-overlay" class="hidden fixed inset-0 z-40 pointer-events-none flex items-center justify-center bg-slate-950/50 backdrop-blur-[2px]">
-        <div class="glass-panel rounded-3xl p-7 border-2 border-amber-400 text-center shadow-2xl">
-            <div id="dice-overlay-sub" class="text-xs font-bold uppercase tracking-widest text-amber-300 mb-2">CANLI ZAR ATILIYOR</div>
-            <div id="dice-overlay-box" class="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 border-2 border-white shadow-xl flex items-center justify-center text-4xl font-extrabold text-slate-950 dice-rolling">
-                🎲
+    <section class="games-grid" aria-label="Oyun Listesi">
+      <!-- Oyun 1: Walls of Dominion -->
+      <article class="game-card">
+        <div>
+          <div class="card-top">
+            <div class="game-icon">
+              <img src="./WallofDominion/favicon.svg" alt="Walls of Dominion Logosu">
             </div>
-            <div id="dice-overlay-label" class="text-sm font-bold text-white mt-3">Zar Dönüyor...</div>
+            <div>
+              <h2 class="game-title">Walls of Dominion</h2>
+              <div class="game-subtitle">Strateji, Fetih ve Savunma</div>
+            </div>
+          </div>
+          <p class="game-desc">
+            Krallığını kur, surlarını güçlendir ve haritada stratejik fetihler yap. WebRTC P2P odasıyla arkadaşlarınla çevrimiçi kapış ya da doğrudan ana oyuna geç.
+          </p>
+          <div class="tags">
+            <span class="tag accent">🌐 Online P2P Lobi</span>
+            <span class="tag">🏰 Strateji &amp; Fetih</span>
+            <span class="tag">🎲 Canlı Zar &amp; Harita</span>
+          </div>
         </div>
-    </div>
-
-    <!-- ========================================================================= -->
-    <!-- 1. EKRAN: ÇOK OYUNCULU LOBİ (ODA KUR / ODAYA KATIL)                        -->
-    <!-- ========================================================================= -->
-    <div id="lobby-screen" class="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-        <div class="glass-panel rounded-3xl p-6 sm:p-8 max-w-5xl w-full border border-amber-500/40 shadow-2xl max-h-[94vh] overflow-y-auto">
-            <!-- Başlık -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-5">
-                <div class="flex items-center gap-3.5">
-                    <div id="lobby-brand-emblem" class="shrink-0 w-12 h-12 rounded-2xl bg-slate-950/90 border border-amber-400/50 p-1 shadow-lg flex items-center justify-center"></div>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">🌐 WebRTC P2P + Sekmeler Arası Canlı Senkron</span>
-                            <span id="net-status-pill" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-semibold">Bağlantı Bekleniyor</span>
-                        </div>
-                        <h1 class="text-2xl sm:text-3xl font-extrabold text-amber-400 font-medieval mt-1">WALLS OF DOMINION • ONLINE LOBİ</h1>
-                        <p class="text-xs text-slate-400">Oda kurup kodu arkadaşlarınla paylaş; lobi hazır olduğunda ana oyunun tüm kurallarıyla çevrimiçi başla.</p>
-                    </div>
-                </div>
-                <a href="game.html" class="self-start sm:self-center px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-amber-300 font-semibold transition shrink-0">
-                    ⬅️ Ana Oyuna Dön
-                </a>
-            </div>
-
-            <!-- ADIM A: ODA SEÇİMİ (Henüz bir odaya girilmediyse) -->
-            <div id="lobby-entry-view" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Sol: Profil & Oda Kur -->
-                <div class="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3">
-                    <div class="space-y-3">
-                        <!-- Üst Avatar & Hükümdar Adı Kartı (Referans Tasarım) -->
-                        <div class="bg-slate-950/90 border border-amber-500/40 rounded-2xl p-3.5 flex items-center gap-3.5 shadow-inner">
-                            <div id="lobby-avatar-preview" class="shrink-0 w-[82px] h-[82px] rounded-full flex items-center justify-center shadow-xl"></div>
-                            <div class="flex-1 min-w-0 space-y-2">
-                                <div>
-                                    <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">HÜKÜMDAR / KRALLIK ADIN</label>
-                                    <input id="input-player-name" type="text" maxlength="22" oninput="onLobbyProfileNameInput()" placeholder="Örn: Kızıl Aslan" class="w-full bg-slate-900/95 border border-slate-700 focus:border-amber-400 rounded-xl px-3 py-2 text-sm text-white outline-none font-bold">
-                                </div>
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                    <button type="button" onclick="saveCurrentLobbyProfile()" class="px-2.5 py-1 rounded-lg bg-emerald-700/80 hover:bg-emerald-600 border border-emerald-400/50 text-[10px] font-bold text-white transition">
-                                        💾 Profili Kaydet
-                                    </button>
-                                    <button type="button" onclick="randomizeLobbyAvatar()" class="px-2.5 py-1 rounded-lg bg-purple-700/80 hover:bg-purple-600 border border-purple-400/50 text-[10px] font-bold text-white transition">
-                                        🎲 Rastgele
-                                    </button>
-                                    <span id="lobby-profile-save-msg" class="text-[10px] font-semibold text-emerald-300 hidden">✓ Kaydedildi</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Kayıtlı Yerel Profiller -->
-                        <div id="lobby-saved-profiles-wrap" class="hidden space-y-1">
-                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">KAYITLI PROFİLLER</div>
-                            <div id="lobby-saved-profiles" class="flex flex-wrap gap-1.5"></div>
-                        </div>
-
-                        <!-- Modüler Avatar Özellikleri (Referans Stil: Renk Daireleri + Hap Butonlar) -->
-                        <div id="lobby-avatar-controls" class="bg-slate-950/65 border border-slate-800 rounded-2xl p-3 max-h-[250px] overflow-y-auto space-y-3 pr-2">
-                            <div>
-                                <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">SANCAK &amp; PELERİN RENGİ</div>
-                                <div id="color-picker-row" class="flex flex-wrap items-center gap-2"></div>
-                            </div>
-                            <div id="lobby-avatar-sections" class="space-y-3"></div>
-                        </div>
-                    </div>
-
-                    <div class="pt-2.5 border-t border-slate-800 space-y-2">
-                        <button id="btn-create-room" onclick="createMultiplayerRoom()" class="w-full gold-btn text-white font-bold py-2.5 px-5 rounded-xl text-sm shadow-lg">
-                            🏰 Yeni Oda Kur &amp; Kod Üret
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Sağ: Mevcut Odaya Katıl -->
-                <div class="bg-slate-900/90 border border-sky-500/30 rounded-2xl p-5 flex flex-col justify-between space-y-4">
-                    <div class="space-y-4">
-                        <div class="text-sm font-bold text-sky-400 uppercase tracking-wider">🔑 2. Arkadaşının Odasına Katıl</div>
-                        <p class="text-xs text-slate-300 leading-relaxed">
-                            Arkadaşının kurduğu odanın <b>4 haneli kodunu</b> aşağıya girerek doğrudan onun masasına bağlanabilirsin.
-                        </p>
-                        <div>
-                            <label class="block text-xs text-slate-300 mb-1">4 Haneli Oda Kodu:</label>
-                            <input id="input-room-code" type="text" maxlength="8" placeholder="Örn: 4829" class="w-full bg-slate-950 border border-sky-500/50 focus:border-sky-400 rounded-xl px-4 py-3 text-center text-xl font-extrabold tracking-widest text-amber-300 uppercase outline-none">
-                        </div>
-                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
-                            <div class="text-amber-300 font-semibold">💡 Tek Bilgisayarda Nasıl Test Edilir?</div>
-                            <div>1. Soldan <b>"Yeni Oda Kur"</b> butonuna bas.</div>
-                            <div>2. Açılan ekranda <b>"➕ Yan Sekmede Test Oyuncusu Aç"</b> butonuna tıkla; ikinci sekme otomatik olarak odaya bağlanır!</div>
-                        </div>
-                    </div>
-
-                    <button id="btn-join-room" onclick="joinMultiplayerRoom()" class="w-full bg-sky-600 hover:bg-sky-500 border border-sky-300 text-white font-bold py-3 px-5 rounded-xl text-sm shadow-lg transition">
-                        🚀 Odaya Bağlan
-                    </button>
-                </div>
-            </div>
-
-            <!-- ADIM B: AKTİF ODA LOBİSİ (Oda kurulduğunda veya odaya girildiğinde açılır) -->
-            <div id="lobby-room-view" class="hidden space-y-5">
-                <!-- Oda Kodu Barı -->
-                <div class="bg-gradient-to-r from-amber-950/60 via-slate-900 to-indigo-950/60 border-2 border-amber-400/60 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div class="flex items-center gap-4">
-                        <div class="bg-slate-950 border border-amber-400 px-4 py-2 rounded-xl text-center">
-                            <div class="text-[10px] text-amber-300 font-bold uppercase tracking-widest">ODA KODU</div>
-                            <div id="display-room-code" class="text-2xl sm:text-3xl font-extrabold text-white tracking-widest font-mono">----</div>
-                        </div>
-                        <div>
-                            <div id="room-role-badge" class="text-xs font-bold text-emerald-300">👑 Oda Kurucusu (Host)</div>
-                            <div class="text-xs text-slate-300 mt-0.5">Arkadaşların bu kodu girerek veya yan sekme butonuyla katılabilir.</div>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="copyRoomCode()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-amber-300">
-                            📋 Kodu Kopyala
-                        </button>
-                        <button onclick="openSecondTabForTesting()" class="px-3 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-600 border border-indigo-400 text-xs font-bold text-white shadow">
-                            ➕ Yan Sekmede Test Oyuncusu Aç
-                        </button>
-                        <button onclick="leaveRoom()" class="px-3 py-2 rounded-xl bg-rose-900/70 hover:bg-rose-800 border border-rose-500/40 text-xs font-bold text-rose-200">
-                            🚪 Odadan Çık
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <!-- Oyuncu Listesi (2 Sütun) -->
-                    <div class="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">👥 Odadaki Krallıklar (<span id="lobby-player-count">1</span>/6)</span>
-                                <span id="lobby-ready-summary" class="text-[11px] font-semibold text-emerald-300">Hazır Durumu</span>
-                            </div>
-                            <div id="lobby-players-list" class="space-y-2"></div>
-                        </div>
-
-                        <!-- Alt Kontroller: Hazırım / Oyunu Başlat -->
-                        <div class="pt-4 mt-4 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                            <button id="btn-toggle-ready" onclick="toggleMyReadyState()" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-300 shadow-lg transition">
-                                ✋ Hazır Ver (Hazırım!)
-                            </button>
-                            <button id="btn-host-start-game" onclick="hostStartMultiplayerGame()" class="hidden gold-btn text-white font-bold py-3 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
-                                🚀 Oyunu Başlat (Tüm Ekranlarda Aç) →
-                            </button>
-                            <div id="guest-waiting-hint" class="hidden text-xs text-slate-400 text-center sm:text-right font-medium">
-                                Hazır verdiğinde <b>Oda Kurucusu (Host)</b> oyunu başlatabilir.
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sağ: Canlı Lobi Sohbeti -->
-                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col h-72">
-                        <div class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2">💬 Oda Sohbeti & Hızlı İfade</div>
-                        <div id="lobby-chat-box" class="flex-1 overflow-y-auto space-y-1.5 text-xs pr-1 mb-2"></div>
-                        <div class="flex items-center gap-1 mb-2">
-                            <button onclick="sendQuickReaction('⚔️')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">⚔️</button>
-                            <button onclick="sendQuickReaction('🛡️')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">🛡️</button>
-                            <button onclick="sendQuickReaction('🤝')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">🤝</button>
-                            <button onclick="sendQuickReaction('🔥')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">🔥</button>
-                            <button onclick="sendQuickReaction('👑')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">👑</button>
-                            <button onclick="sendQuickReaction('😂')" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sm">😂</button>
-                        </div>
-                        <form onsubmit="submitChatMessage(event, 'lobby-chat-input')" class="flex gap-1.5">
-                            <input id="lobby-chat-input" type="text" maxlength="240" placeholder="Mesaj yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
-                            <button type="submit" class="px-3 py-1.5 gold-btn rounded-lg text-xs font-bold text-white">Gönder</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+        <div class="card-actions">
+          <a class="btn btn-primary" href="./WallofDominion/index.html">Online Lobiye Gir →</a>
+          <a class="btn btn-secondary" href="./WallofDominion/game.html">Ana Oyun</a>
         </div>
-    </div>
+      </article>
 
-    <!-- ========================================================================= -->
-    <!-- 2. EKRAN: OYUN İÇİ ÜST HUD, SOL KRALLIK/SOHBET PANELİ VE ALT EYLEM BARI    -->
-    <!-- ========================================================================= -->
-    <div id="game-hud" class="hidden fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-2.5 sm:p-4">
-        <!-- Üst Bar -->
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <!-- Sol: Benim Krallığım & Kaynaklarım -->
-            <div class="glass-panel rounded-2xl px-4 py-2.5 pointer-events-auto flex flex-wrap items-center gap-4">
-                <div class="flex items-center gap-2.5">
-                    <div id="hud-my-dot" class="w-4 h-4 rounded-full ring-2 ring-white"></div>
-                    <div>
-                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">SENİN KRALLIĞIN</div>
-                        <div id="hud-my-name" class="text-sm font-extrabold text-white">Krallık</div>
-                    </div>
-                </div>
-
-                <div class="h-7 w-px bg-slate-700"></div>
-
-                <!-- Benim Kaynaklarım -->
-                <div class="flex items-center gap-2.5 text-xs font-bold">
-                    <span class="bg-amber-950/70 border border-amber-500/40 px-2.5 py-1 rounded-lg text-amber-300">🪙 <span id="hud-my-gold">8</span></span>
-                    <span class="bg-emerald-950/70 border border-emerald-500/40 px-2.5 py-1 rounded-lg text-emerald-300">🪵 <span id="hud-my-wood">3</span></span>
-                    <span class="bg-sky-950/70 border border-sky-500/40 px-2.5 py-1 rounded-lg text-sky-300">⛏️ <span id="hud-my-iron">1</span></span>
-                </div>
+      <!-- Oyun 2: BARONIA -->
+      <article class="game-card">
+        <div>
+          <div class="card-top">
+            <div class="game-icon">
+              <img src="./Baronia/assets/icon.svg" alt="BARONIA Logosu">
             </div>
-
-            <!-- Orta: Şu An Sıra Kimde? -->
-            <div id="turn-banner-pill" class="glass-panel rounded-2xl px-5 py-2.5 pointer-events-auto border-2 border-amber-400 flex items-center gap-3">
-                <span id="turn-active-dot" class="w-3.5 h-3.5 rounded-full animate-ping"></span>
-                <div class="text-xs sm:text-sm font-bold">
-                    <span id="turn-number-badge" class="text-amber-400 mr-1">TUR 1:</span>
-                    <span id="turn-player-label" class="text-white">Sıra Bekleniyor...</span>
-                </div>
+            <div>
+              <h2 class="game-title">BARONIA</h2>
+              <div class="game-subtitle">İstanbul Edisyonu</div>
             </div>
-
-            <!-- Sağ: Oda Bilgisi & Emoji Barı -->
-            <div class="glass-panel rounded-2xl px-3 py-2 pointer-events-auto flex items-center gap-1.5">
-                <span class="text-xs font-bold text-amber-300 px-2 py-1 rounded bg-slate-900 border border-slate-700">ODA: <span id="hud-room-code">----</span></span>
-                <button onclick="sendQuickReaction('⚔️')" class="px-2 py-1 hover:bg-slate-800 rounded text-sm" title="Saldırı İfadesi">⚔️</button>
-                <button onclick="sendQuickReaction('🛡️')" class="px-2 py-1 hover:bg-slate-800 rounded text-sm" title="Savunma İfadesi">🛡️</button>
-                <button onclick="sendQuickReaction('🤝')" class="px-2 py-1 hover:bg-slate-800 rounded text-sm" title="İttifak İfadesi">🤝</button>
-                <button onclick="sendQuickReaction('🔥')" class="px-2 py-1 hover:bg-slate-800 rounded text-sm" title="Ateş İfadesi">🔥</button>
-                <button onclick="openOnlineTradeModal()" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 rounded-lg text-xs text-amber-300 font-bold">🤝 Canlı Teklif</button>
-            </div>
+          </div>
+          <p class="game-desc">
+            40 karelik 3D İstanbul haritasında arsa topla, 7 mahallede işletmeni kur, nakit ve banka yönetimiyle ticaret imparatorluğunu büyüt.
+          </p>
+          <div class="tags">
+            <span class="tag accent">🌐 Online &amp; Botlu</span>
+            <span class="tag">🏙️ 40 Kare 3D Harita</span>
+            <span class="tag">💰 Nakit, Banka &amp; İhale</span>
+          </div>
         </div>
-
-        <!-- Orta Sol: Oyuncular & Canlı Sohbet/Günlük -->
-        <div class="flex-1 flex items-start justify-between my-3 pointer-events-none overflow-hidden">
-            <div class="w-64 flex flex-col gap-2 pointer-events-auto max-h-full">
-                <!-- Krallıklar Listesi -->
-                <div class="glass-panel rounded-2xl p-3 space-y-1.5">
-                    <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400">👑 Online Krallıklar</div>
-                    <div id="hud-players-list" class="space-y-1 text-xs"></div>
-                </div>
-
-                <!-- Canlı Oyun Günlüğü & Sohbet -->
-                <div class="glass-panel rounded-2xl p-3 flex flex-col h-64">
-                    <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1.5">📜 Canlı Senkron Günlüğü & Sohbet</div>
-                    <div id="game-log-box" class="flex-1 overflow-y-auto space-y-1 text-[11px] text-slate-300 pr-1 mb-2"></div>
-                    <form onsubmit="submitChatMessage(event, 'game-chat-input')" class="flex gap-1">
-                        <input id="game-chat-input" type="text" maxlength="240" placeholder="Sohbete yaz..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none">
-                        <button type="submit" class="px-2.5 py-1 gold-btn rounded-lg text-xs font-bold text-white">➤</button>
-                    </form>
-                </div>
-            </div>
+        <div class="card-actions">
+          <a class="btn btn-primary" href="./Baronia/index.html">Lobiye Gir &amp; Oyna →</a>
         </div>
-
-        <!-- Alt Aksiyon Barı (Sadece Sırası Gelen Oyuncuda Aktif, Diğerlerinde Canlı İzleme Modu) -->
-        <div class="w-full max-w-3xl mx-auto pointer-events-auto">
-            <div id="bottom-bar-panel" class="glass-panel rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 border-2 border-amber-500/40">
-                <div class="text-center sm:text-left">
-                    <div id="action-bar-title" class="text-sm font-extrabold text-amber-400">Sıra Kontrolü</div>
-                    <div id="action-bar-sub" class="text-xs text-slate-300">Sıranız geldiğinde zar atıp ordunuzu ilerletebilirsiniz.</div>
-                </div>
-                <div id="action-bar-btns" class="flex flex-wrap items-center justify-center gap-2"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========================================================================= -->
-    <!-- 3. CANLI TİCARET TEKLİFİ GÖNDERME & ALMA MODALLARI                        -->
-    <!-- ========================================================================= -->
-    <div id="send-trade-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-        <div class="glass-panel rounded-2xl p-6 max-w-md w-full border border-amber-400/50 space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-bold text-amber-400 font-medieval">🤝 Canlı Ticaret Teklifi Gönder</h3>
-                <button onclick="document.getElementById('send-trade-modal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <p class="text-xs text-slate-300">Seçtiğin oyuncunun ekranında anında onay penceresi açılır! Kabul ederse ikiniz de <b>+1🪙 Kervan Bonusu</b> alırsınız.</p>
-            <div class="space-y-3 text-xs">
-                <div>
-                    <label class="block text-slate-400 mb-1">Teklif Gönderilecek Online Oyuncu:</label>
-                    <select id="online-trade-target" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"></select>
-                </div>
-                <div class="grid grid-cols-2 gap-3 bg-slate-900/90 p-3 rounded-xl border border-slate-800">
-                    <div class="space-y-1.5">
-                        <div class="font-bold text-amber-400">📤 Senin Vereceğin</div>
-                        <label class="flex justify-between"><span>🪙 Altın:</span> <input id="ot-give-gold" type="number" min="0" value="2" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                        <label class="flex justify-between"><span>🪵 Odun:</span> <input id="ot-give-wood" type="number" min="0" value="0" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                        <label class="flex justify-between"><span>⛏️ Demir:</span> <input id="ot-give-iron" type="number" min="0" value="0" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                    </div>
-                    <div class="space-y-1.5">
-                        <div class="font-bold text-emerald-400">📥 Karşıdan İstediğin</div>
-                        <label class="flex justify-between"><span>🪙 Altın:</span> <input id="ot-take-gold" type="number" min="0" value="0" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                        <label class="flex justify-between"><span>🪵 Odun:</span> <input id="ot-take-wood" type="number" min="0" value="1" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                        <label class="flex justify-between"><span>⛏️ Demir:</span> <input id="ot-take-iron" type="number" min="0" value="0" class="w-14 bg-slate-800 rounded px-1.5 py-0.5 text-white text-right"></label>
-                    </div>
-                </div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="document.getElementById('send-trade-modal').classList.add('hidden')" class="flex-1 py-2 rounded-xl bg-slate-800 text-xs font-bold text-slate-300">İptal</button>
-                <button onclick="sendLiveTradeOffer()" class="flex-1 py-2 rounded-xl gold-btn text-xs font-bold text-white">📨 Teklifi Karşı Ekrana Gönder</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- KARŞI OYUNCUDAN GELEN CANLI TİCARET TEKLİFİ POPUP'I -->
-    <div id="incoming-trade-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-        <div class="glass-panel rounded-2xl p-6 max-w-md w-full border-2 border-emerald-400 text-center space-y-4 shadow-2xl">
-            <div class="text-4xl">🐫🤝</div>
-            <h3 class="text-xl font-bold text-amber-400 font-medieval">Yeni Ticaret Teklifi Geldi!</h3>
-            <div id="incoming-trade-desc" class="text-xs sm:text-sm text-slate-200 bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 leading-relaxed"></div>
-            <div class="text-[11px] text-emerald-300 font-semibold">Kabul edersen iki krallık da Kasadan anında <b>+1 🪙 Kervan Bonusu</b> kazanacak!</div>
-            <div class="flex gap-3">
-                <button onclick="respondToIncomingTrade(false)" class="flex-1 py-2.5 rounded-xl bg-rose-800 hover:bg-rose-700 text-white text-xs font-bold">❌ Reddet</button>
-                <button onclick="respondToIncomingTrade(true)" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-300 text-white text-xs font-bold shadow-lg">✅ Teklifi Kabul Et</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // =========================================================================
-        // 1. ÜÇ KANALLI AĞ KATMANI (WebRTC PeerJS + BroadcastChannel + localStorage)
-        // Hem farklı bilgisayarlar/telefonlar arasında (GitHub Pages / İnternet)
-        // hem de aynı bilgisayardaki yan sekmeler arasında (%100 garantili, 0ms) çalışır!
-        // =========================================================================
-        const BANNER_COLORS = [
-            { name: 'Kızıl Aslan', hex: '#ef4444' },
-            { name: 'Safir Kartal', hex: '#3b82f6' },
-            { name: 'Zümrüt Muhafız', hex: '#10b981' },
-            { name: 'Altın Güneş', hex: '#f59e0b' },
-            { name: 'Ametist Gölge', hex: '#a855f7' },
-            { name: 'Turkuaz Fırtına', hex: '#06b6d4' },
-            { name: 'Gümüş Kurt', hex: '#94a3b8' },
-            { name: 'Pembe Şafak', hex: '#ec4899' },
-            { name: 'Kehribar Ejderha', hex: '#f97316' },
-            { name: 'Obsidyen Gece', hex: '#64748b' }
-        ];
-
-        let myPeerId = 'p_' + Math.random().toString(36).substring(2, 9);
-        let myName = 'Kızıl Aslan';
-        let myColor = BANNER_COLORS[0].hex;
-        let currentRoomCode = null;
-        let isHost = false;
-        let hasEnteredPlayingScreen = false;
-        let currentRenderedSeed = null;
-        let isLeavingRoom = false;
-
-        // =========================================================================
-        // 1.B SADE OYUN AMBLEMİ, MODÜLER SVG AVATAR MOTORU VE YEREL PROFİLLER
-        // =========================================================================
-        function getGameLogoSvg(size = 40) {
-            return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" class="shrink-0" aria-hidden="true">
-                <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="#0f172a" stroke="#f59e0b" stroke-width="3.5" stroke-linejoin="round"/>
-                <path d="M18 22 H24 V27 H29 V22 H35 V27 H40 V22 H46 V46 H18 Z" fill="#f59e0b" stroke="#0f172a" stroke-width="1" stroke-linejoin="round"/>
-                <path d="M27 46 V37 C27 33.5 37 33.5 37 37 V46 Z" fill="#0f172a"/>
-            </svg>`;
-        }
-
-        const AVATAR_SKIN_TONES = {
-            fair: { label: 'Açık Ten', fill: '#e8c5a8', shade: '#cca07e' },
-            sand: { label: 'Kum', fill: '#c7a17a', shade: '#a88159' },
-            warm: { label: 'Buğday', fill: '#a97d56', shade: '#875f3c' },
-            bronze: { label: 'Bronz', fill: '#7c583c', shade: '#5c3e27' },
-            deep: { label: 'Koyu', fill: '#5a3822', shade: '#3e2414' }
-        };
-
-        const AVATAR_BODY_TYPES = {
-            slim: 'Zayıf',
-            standard: 'Standart',
-            muscular: 'Kaslı',
-            stout: 'Göbekli'
-        };
-
-        const AVATAR_HEADGEAR = {
-            short: 'Kısa Kesim',
-            wavy: 'Dalgalı',
-            braided: 'Örgülü',
-            messy: 'Dağınık',
-            bald: 'Karizmatik Kel',
-            crown: 'Altın Taç',
-            tiara: 'Kraliçe Tacı',
-            jester_cap: 'Çıngıraklı Şapka',
-            knight_helm: 'Şövalye Miğferi',
-            wizard_hat: 'Büyücü Şapkası',
-            hood: 'Haydut Kapüşonu',
-            iron_cap: 'Demir Başlık'
-        };
-
-        const AVATAR_HAIR_COLORS = {
-            raven: { label: 'Kuzguni Siyah', hex: '#1e293b' },
-            dark_brown: { label: 'Koyu Kahve', hex: '#3b2416' },
-            chestnut: { label: 'Kestane', hex: '#6e3818' },
-            copper: { label: 'Bakır Turuncu', hex: '#d97706' },
-            crimson: { label: 'Kızıl', hex: '#991b1b' },
-            silver: { label: 'Gümüş Gri', hex: '#94a3b8' }
-        };
-
-        const AVATAR_EYES = {
-            sharp: 'Keskin Bakış',
-            happy: 'Gülen Göz',
-            stern: 'Sert Bakış',
-            weary: 'Yorgun Bakış',
-            monocle: 'Altın Monokl',
-            eyepatch: 'Göz Bandı',
-            scar: 'Yara İzi',
-            face_paint: 'Yüz Boyası',
-            shackles: 'Demir Zincir'
-        };
-
-        const AVATAR_FACIAL = {
-            smile: 'Özgüvenli Gülüş',
-            smirk: 'Kurnaz Sırıtış',
-            serious: 'Ciddi Hükümdar',
-            mustache: 'Klasik Bıyık',
-            king_beard: 'Kral Sakalı',
-            long_beard: 'Uzun Sakal',
-            goatee: 'Sivri Sakal'
-        };
-
-        const AVATAR_OUTFITS = {
-            tattered: 'Yırtık Kıyafet',
-            royal_cloak: 'Kraliyet Kaftanı',
-            harlequin: 'Baklava Kostüm',
-            plate_armor: 'Plaka Zırh',
-            chainmail: 'Zincir Zırh',
-            mage_robe: 'Büyücü Cübbesi',
-            rogue_leather: 'Haydut Derisi',
-            noble_cape: 'Asil Pelerin'
-        };
-
-        const AVATAR_OUTFIT_COLORS = {
-            slate: { label: 'Gece Laciverti', fill: '#1e293b', dark: '#0f172a' },
-            charcoal: { label: 'Koyu Kül', fill: '#334155', dark: '#1e293b' },
-            burgundy: { label: 'Bordo', fill: '#7f1d1d', dark: '#450a0a' },
-            navy: { label: 'Kraliyet Mavisi', fill: '#1e3a8a', dark: '#172554' },
-            emerald: { label: 'Zümrüt Yeşili', fill: '#065f46', dark: '#022c22' },
-            purple: { label: 'Mistik Mor', fill: '#581c87', dark: '#2e1065' }
-        };
-
-        const AVATAR_DEFAULT_SLOTS = [
-            { skin: 'warm', bodyType: 'standard', headgear: 'crown', hairColor: 'copper', eyes: 'monocle', facial: 'mustache', outfit: 'royal_cloak', outfitColor: 'emerald' },
-            { skin: 'fair', bodyType: 'muscular', headgear: 'knight_helm', hairColor: 'raven', eyes: 'scar', facial: 'serious', outfit: 'plate_armor', outfitColor: 'navy' },
-            { skin: 'fair', bodyType: 'slim', headgear: 'jester_cap', hairColor: 'copper', eyes: 'face_paint', facial: 'smirk', outfit: 'harlequin', outfitColor: 'purple' },
-            { skin: 'sand', bodyType: 'slim', headgear: 'messy', hairColor: 'dark_brown', eyes: 'shackles', facial: 'serious', outfit: 'tattered', outfitColor: 'charcoal' },
-            { skin: 'fair', bodyType: 'standard', headgear: 'wizard_hat', hairColor: 'silver', eyes: 'sharp', facial: 'long_beard', outfit: 'mage_robe', outfitColor: 'purple' },
-            { skin: 'bronze', bodyType: 'muscular', headgear: 'hood', hairColor: 'raven', eyes: 'eyepatch', facial: 'goatee', outfit: 'rogue_leather', outfitColor: 'burgundy' }
-        ];
-
-        function getDefaultAvatar(slotIndex = 0) {
-            return { ...AVATAR_DEFAULT_SLOTS[Math.abs(slotIndex) % AVATAR_DEFAULT_SLOTS.length] };
-        }
-
-        function sanitizeAvatar(raw, slotIndex = 0) {
-            const fallback = getDefaultAvatar(slotIndex);
-            if (!raw || typeof raw !== 'object') return fallback;
-            const pick = (val, dict, def) => (typeof val === 'string' && Object.prototype.hasOwnProperty.call(dict, val) ? val : def);
-            return {
-                skin: pick(raw.skin, AVATAR_SKIN_TONES, fallback.skin),
-                bodyType: pick(raw.bodyType, AVATAR_BODY_TYPES, fallback.bodyType),
-                headgear: pick(raw.headgear, AVATAR_HEADGEAR, fallback.headgear),
-                hairColor: pick(raw.hairColor, AVATAR_HAIR_COLORS, fallback.hairColor),
-                eyes: pick(raw.eyes, AVATAR_EYES, fallback.eyes),
-                facial: pick(raw.facial, AVATAR_FACIAL, fallback.facial),
-                outfit: pick(raw.outfit, AVATAR_OUTFITS, fallback.outfit),
-                outfitColor: pick(raw.outfitColor, AVATAR_OUTFIT_COLORS, fallback.outfitColor)
-            };
-        }
-
-        function randomizeAvatar() {
-            const pickKey = obj => {
-                const keys = Object.keys(obj);
-                return keys[Math.floor(Math.random() * keys.length)];
-            };
-            return {
-                skin: pickKey(AVATAR_SKIN_TONES),
-                bodyType: pickKey(AVATAR_BODY_TYPES),
-                headgear: pickKey(AVATAR_HEADGEAR),
-                hairColor: pickKey(AVATAR_HAIR_COLORS),
-                eyes: pickKey(AVATAR_EYES),
-                facial: pickKey(AVATAR_FACIAL),
-                outfit: pickKey(AVATAR_OUTFITS),
-                outfitColor: pickKey(AVATAR_OUTFIT_COLORS)
-            };
-        }
-
-        function renderAvatarSvg(rawAvatar, size = 40, accentColor = '#f59e0b') {
-            const av = sanitizeAvatar(rawAvatar, 0);
-            const skin = AVATAR_SKIN_TONES[av.skin] || AVATAR_SKIN_TONES.warm;
-            const hairC = (AVATAR_HAIR_COLORS[av.hairColor] || AVATAR_HAIR_COLORS.copper).hex;
-            const oc = AVATAR_OUTFIT_COLORS[av.outfitColor] || AVATAR_OUTFIT_COLORS.emerald;
-            const accent = /^#[0-9a-fA-F]{3,8}$/.test(String(accentColor || '')) ? accentColor : '#f59e0b';
-            const uid = 'av_' + Math.random().toString(36).slice(2, 8);
-
-            // Gövde genişliği bodyType'a göre ayarlanır
-            const bodyWidth = { slim: 18, standard: 22, muscular: 25, stout: 27 }[av.bodyType] || 22;
-            const shoulderL = 32 - bodyWidth;
-            const shoulderR = 32 + bodyWidth;
-            const shoulderY = av.bodyType === 'muscular' ? 42 : (av.bodyType === 'stout' ? 43 : 44);
-
-            // Kıyafet katmanı
-            let outfitSvg = '';
-            if (av.outfit === 'tattered') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 L${shoulderL + 3} ${shoulderY + 2} L23 ${shoulderY} L28 48 L32 45 L36 49 L41 ${shoulderY} L${shoulderR - 3} ${shoulderY + 2} L${shoulderR} 64 Z" fill="${oc.fill}" stroke="${oc.dark}" stroke-width="1.2"/>
-                    <path d="M21 47 L29 61 M42 48 L34 62 M24 55 L39 51" stroke="${oc.dark}" stroke-width="1.6" stroke-linecap="round"/>
-                    <path d="M${shoulderL + 5} ${shoulderY + 3} L${shoulderR - 9} 60" stroke="#92400e" stroke-width="2.2" stroke-dasharray="3 2"/>
-                    <rect x="26" y="49" width="6" height="5" rx="0.8" fill="${oc.dark}" stroke="#78716c" stroke-width="0.6" transform="rotate(-10 29 51)"/>`;
-            } else if (av.outfit === 'harlequin') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 1} 47 21 ${shoulderY} 32 ${shoulderY} L32 64 Z" fill="${oc.fill}"/>
-                    <path d="M${shoulderR} 64 C${shoulderR - 1} 47 43 ${shoulderY} 32 ${shoulderY} L32 64 Z" fill="${accent}"/>
-                    <path d="M19 46 L24 52 L29 46 L35 52 L40 46 L45 52" fill="none" stroke="#fef08a" stroke-width="1.8" stroke-linejoin="round"/>
-                    <circle cx="24" cy="53.5" r="1.4" fill="#fbbf24"/><circle cx="35" cy="53.5" r="1.4" fill="#fbbf24"/><circle cx="45" cy="53" r="1.4" fill="#fbbf24"/>`;
-            } else if (av.outfit === 'plate_armor') {
-                outfitSvg = `
-                    <path d="M${shoulderL - 1} 64 C${shoulderL + 1} 46 20 ${shoulderY - 1} 32 ${shoulderY - 1} C44 ${shoulderY - 1} ${shoulderR - 1} 46 ${shoulderR + 1} 64 Z" fill="#64748b" stroke="#e2e8f0" stroke-width="1.3"/>
-                    <path d="M32 43 V64 M18 50 Q32 55 46 50" stroke="#cbd5e1" stroke-width="1.3" fill="none"/>
-                    <circle cx="${shoulderL + 6}" cy="49" r="2.2" fill="${accent}"/><circle cx="${shoulderR - 6}" cy="49" r="2.2" fill="${accent}"/>`;
-            } else if (av.outfit === 'chainmail') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 2} 47 21 ${shoulderY} 32 ${shoulderY} C43 ${shoulderY} ${shoulderR - 2} 47 ${shoulderR} 64 Z" fill="${oc.fill}" stroke="#94a3b8" stroke-width="1.2"/>
-                    <path d="M16 49 H48 M14 54 H50 M13 59 H51" stroke="#cbd5e1" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="2 2"/>
-                    <path d="M22 45 Q32 51 42 45" fill="none" stroke="${accent}" stroke-width="2"/>`;
-            } else if (av.outfit === 'mage_robe') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 2} 46 21 ${shoulderY} 32 ${shoulderY} C43 ${shoulderY} ${shoulderR - 2} 46 ${shoulderR} 64 Z" fill="${oc.fill}" stroke="#fbbf24" stroke-width="1.3"/>
-                    <path d="M24 44 L32 62 L40 44" fill="${oc.dark}" stroke="#fbbf24" stroke-width="1"/>
-                    <circle cx="32" cy="53" r="2" fill="${accent}"/>`;
-            } else if (av.outfit === 'rogue_leather') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 2} 47 21 ${shoulderY} 32 ${shoulderY} C43 ${shoulderY} ${shoulderR - 2} 47 ${shoulderR} 64 Z" fill="${oc.fill}" stroke="${oc.dark}" stroke-width="1.2"/>
-                    <path d="M${shoulderL + 7} 45 L${shoulderR - 7} 62" stroke="#78350f" stroke-width="3.6"/>
-                    <rect x="29" y="51" width="6" height="4" rx="1" fill="${accent}"/>`;
-            } else if (av.outfit === 'noble_cape') {
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 2} 46 21 ${shoulderY} 32 ${shoulderY} C43 ${shoulderY} ${shoulderR - 2} 46 ${shoulderR} 64 Z" fill="${oc.fill}" stroke="#fde68a" stroke-width="1.2"/>
-                    <path d="M${shoulderL + 6} 45 Q32 53 ${shoulderR - 6} 45 L${shoulderR - 9} 64 L${shoulderL + 9} 64 Z" fill="${accent}"/>
-                    <circle cx="23" cy="48" r="2" fill="#fbbf24"/><circle cx="41" cy="48" r="2" fill="#fbbf24"/>`;
-            } else {
-                // royal_cloak (varsayılan, referans stilde fular/ceket vurgusu)
-                outfitSvg = `
-                    <path d="M${shoulderL} 64 C${shoulderL + 2} 46 21 ${shoulderY} 32 ${shoulderY} C43 ${shoulderY} ${shoulderR - 2} 46 ${shoulderR} 64 Z" fill="${oc.fill}" stroke="${oc.dark}" stroke-width="1.2"/>
-                    <path d="M26 44 L32 61 L38 44 Z" fill="#f8fafc"/>
-                    <path d="M30.5 46 L33.5 46 L34.5 58 L32 61 L29.5 58 Z" fill="${accent}"/>
-                    <path d="M21 45 L27 57 L24 44 M43 45 L37 57 L40 44" fill="${oc.dark}"/>
-                    <circle cx="23.5" cy="52" r="1.2" fill="#fbbf24"/><circle cx="40.5" cy="52" r="1.2" fill="#fbbf24"/>`;
-            }
-
-            // Arka Saç (dalgalı / örgülü / dağınık)
-            let backHairSvg = '';
-            if (av.headgear === 'wavy') {
-                backHairSvg = `<path d="M17 25 Q13 38 15 50 L24 48 Z M47 25 Q51 38 49 50 L40 48 Z" fill="${hairC}"/>`;
-            } else if (av.headgear === 'braided') {
-                backHairSvg = `<rect x="14" y="30" width="4.5" height="19" rx="2" fill="${hairC}"/><rect x="45.5" y="30" width="4.5" height="19" rx="2" fill="${hairC}"/>
-                    <circle cx="16.2" cy="48" r="1.4" fill="#fbbf24"/><circle cx="47.8" cy="48" r="1.4" fill="#fbbf24"/>`;
-            } else if (av.headgear === 'messy') {
-                backHairSvg = `<path d="M15 28 L12 34 L17 36 L14 42 L21 40 Z M49 28 L52 34 L47 36 L50 42 L43 40 Z" fill="${hairC}"/>`;
-            }
-
-            const headSvg = `
-                <rect x="27" y="38" width="10" height="9" rx="3" fill="${skin.shade}"/>
-                <circle cx="19" cy="30.5" r="3.3" fill="${skin.shade}"/>
-                <circle cx="45" cy="30.5" r="3.3" fill="${skin.shade}"/>
-                <ellipse cx="32" cy="29" rx="12.8" ry="14.5" fill="${skin.fill}"/>
-            `;
-
-            // Üst Saç ve Başlık
-            let headTopSvg = '';
-            if (av.headgear === 'short') {
-                headTopSvg = `<path d="M19 25 Q21 13 32 13 Q43 13 45 25 Q38 19 32 20 Q26 19 19 25 Z" fill="${hairC}"/>`;
-            } else if (av.headgear === 'wavy') {
-                headTopSvg = `<path d="M18.5 26 Q21 13 32 13 Q43 13 45.5 26 Q38 19 32 21 Q26 19 18.5 26 Z" fill="${hairC}"/>`;
-            } else if (av.headgear === 'braided') {
-                headTopSvg = `<path d="M19 25 Q22 14 32 14 Q42 14 45 25 Q35 19 32 21 Q29 19 19 25 Z" fill="${hairC}"/>`;
-            } else if (av.headgear === 'messy') {
-                headTopSvg = `<path d="M18 26 L21 14 L27 18 L32 12 L37 18 L43 14 L46 26 Q38 20 32 22 Q26 20 18 26 Z" fill="${hairC}"/>`;
-            } else if (av.headgear === 'crown') {
-                headTopSvg = `<path d="M20 22 Q22 15 32 15 Q42 15 44 22 Q37 19 32 19 Q27 19 20 22 Z" fill="${hairC}"/>
-                    <path d="M20 18 L22 9 L27.5 14 L32 7 L36.5 14 L42 9 L44 18 Z" fill="#fbbf24" stroke="#78350f" stroke-width="1" stroke-linejoin="round"/>
-                    <circle cx="32" cy="14" r="1.4" fill="#ef4444"/><circle cx="25.5" cy="15.5" r="1" fill="#3b82f6"/><circle cx="38.5" cy="15.5" r="1" fill="#10b981"/>`;
-            } else if (av.headgear === 'tiara') {
-                headTopSvg = `<path d="M19.5 24 Q22 14 32 14 Q42 14 44.5 24 Q37 19 32 20 Q27 19 19.5 24 Z" fill="${hairC}"/>
-                    <path d="M22 17 L25 11 L29 14 L32 8 L35 14 L39 11 L42 17 Z" fill="#fde68a" stroke="#b45309" stroke-width="0.9"/>
-                    <circle cx="32" cy="13.5" r="1.4" fill="#ec4899"/>`;
-            } else if (av.headgear === 'jester_cap') {
-                headTopSvg = `<path d="M20 20 Q13 8 9 12 Q14 20 24 18 Q32 13 40 18 Q50 20 55 12 Q51 8 44 20 Z" fill="${oc.fill}" stroke="#fbbf24" stroke-width="1"/>
-                    <path d="M24 18 Q32 10 40 18 L32 16 Z" fill="${accent}"/>
-                    <circle cx="9.5" cy="12.5" r="2.2" fill="#fde047"/><circle cx="54.5" cy="12.5" r="2.2" fill="#fde047"/>`;
-            } else if (av.headgear === 'knight_helm') {
-                headTopSvg = `<path d="M18.5 26 C18.5 12 24 9 32 9 C40 9 45.5 12 45.5 26 L42 24 C40 18 36 17 32 17 C28 17 24 18 22 24 Z" fill="#94a3b8" stroke="#1e293b" stroke-width="1.1"/>
-                    <path d="M30 9 L32 5 L34 9" fill="${accent}"/><rect x="30.5" y="12" width="3" height="11" rx="1" fill="#cbd5e1"/>`;
-            } else if (av.headgear === 'wizard_hat') {
-                headTopSvg = `<path d="M20 23 Q23 16 32 16 Q41 16 44 23 Z" fill="${hairC}"/>
-                    <path d="M12 19 Q32 22 52 19 Q42 16 39 15 L33 3 L25 15 Q19 16 12 19 Z" fill="#312e81" stroke="#c084fc" stroke-width="1.1" stroke-linejoin="round"/>
-                    <path d="M21 17 Q32 19 43 17" stroke="#fbbf24" stroke-width="2" fill="none"/>`;
-            } else if (av.headgear === 'hood') {
-                headTopSvg = `<path d="M16 32 C16 14 23 10 32 10 C41 10 48 14 48 32 L44 25 C41 19 37 17 32 17 C27 17 23 19 20 25 Z" fill="${oc.dark}" stroke="${accent}" stroke-width="1.1"/>`;
-            } else if (av.headgear === 'iron_cap') {
-                headTopSvg = `<path d="M19 22 C19 12 25 11 32 11 C39 11 45 12 45 22 Z" fill="#64748b" stroke="#0f172a" stroke-width="1.1"/>
-                    <path d="M18 21 H46" stroke="#cbd5e1" stroke-width="2"/>`;
-            }
-
-            // Bakış & Aksesuar
-            let eyesSvg = `<circle cx="26.5" cy="29" r="1.9" fill="#0f172a"/><circle cx="37.5" cy="29" r="1.9" fill="#0f172a"/>
-                <circle cx="27.1" cy="28.3" r="0.6" fill="#ffffff"/><circle cx="38.1" cy="28.3" r="0.6" fill="#ffffff"/>`;
-            if (av.eyes === 'happy') {
-                eyesSvg += `<path d="M23.5 25.5 Q26.5 23.5 29.5 25.5 M34.5 25.5 Q37.5 23.5 40.5 25.5" stroke="#1e293b" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
-            } else if (av.eyes === 'stern') {
-                eyesSvg += `<path d="M23 26.5 H29.5 M34.5 26.5 H41" stroke="#1e293b" stroke-width="1.7" stroke-linecap="round"/>`;
-            } else if (av.eyes === 'weary') {
-                eyesSvg += `<path d="M23 27 L29.5 25 M41 27 L34.5 25" stroke="#1e293b" stroke-width="1.4" stroke-linecap="round"/>`;
-            } else {
-                eyesSvg += `<path d="M23 25.5 L29.5 27 M41 25.5 L34.5 27" stroke="#1e293b" stroke-width="1.5" stroke-linecap="round"/>`;
-            }
-
-            if (av.eyes === 'monocle') {
-                eyesSvg += `<circle cx="37.5" cy="29" r="4.3" fill="#fef08a" fill-opacity="0.16" stroke="#fbbf24" stroke-width="1.5"/>
-                    <path d="M41.5 31 Q42.5 39 39.5 46" stroke="#fbbf24" stroke-width="1" stroke-dasharray="1.5 1.5" fill="none"/>`;
-            } else if (av.eyes === 'eyepatch') {
-                eyesSvg += `<line x1="19.5" y1="24" x2="44" y2="33" stroke="#0f172a" stroke-width="1.4"/>
-                    <path d="M22.5 26.5 H30.5 V30.5 C30.5 33 22.5 33 22.5 30.5 Z" fill="#0f172a" stroke="#475569" stroke-width="0.7"/>`;
-            } else if (av.eyes === 'scar') {
-                eyesSvg += `<path d="M35.5 23 L40.5 34" stroke="#991b1b" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M36 27 L38.5 26 M37.5 30.5 L40 29.5" stroke="#991b1b" stroke-width="1"/>`;
-            } else if (av.eyes === 'face_paint') {
-                eyesSvg += `<polygon points="26.5,24 28.5,26.5 26.5,28 24.5,26.5" fill="${accent}" fill-opacity="0.75"/>
-                    <polygon points="37.5,24 39.5,26.5 37.5,28 35.5,26.5" fill="${accent}" fill-opacity="0.75"/>
-                    <path d="M22.5 33 L26.5 31 L25 35 Z M41.5 33 L37.5 31 L39 35 Z" fill="#dc2626" fill-opacity="0.8"/>`;
-            } else if (av.eyes === 'shackles') {
-                eyesSvg += `<rect x="25.5" y="40.5" width="13" height="3.8" rx="1.2" fill="#475569" stroke="#cbd5e1" stroke-width="0.8"/>
-                    <ellipse cx="29" cy="47.5" rx="2.3" ry="1.5" fill="none" stroke="#94a3b8" stroke-width="1.3"/>
-                    <ellipse cx="25.5" cy="50.5" rx="2.3" ry="1.5" fill="none" stroke="#94a3b8" stroke-width="1.3"/>
-                    <ellipse cx="35" cy="47.5" rx="2.3" ry="1.5" fill="none" stroke="#94a3b8" stroke-width="1.3"/>`;
-            }
-
-            // İfade & Sakal
-            let facialSvg = '';
-            if (av.facial === 'smile') {
-                facialSvg = `<path d="M27.5 35.5 Q32 39 36.5 35.5" stroke="#450a0a" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
-            } else if (av.facial === 'smirk') {
-                facialSvg = `<path d="M27.5 36 Q33 38.5 38 34.2" stroke="#450a0a" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
-            } else if (av.facial === 'mustache') {
-                facialSvg = `<path d="M23 35.2 Q28 31.8 32 34.8 Q36 31.8 41 35.2 Q36 37.5 32 35.6 Q28 37.5 23 35.2 Z" fill="${hairC}"/>
-                    <path d="M29 37.5 Q32 39 35 37.5" stroke="#450a0a" stroke-width="1.2" fill="none"/>`;
-            } else if (av.facial === 'king_beard') {
-                facialSvg = `<path d="M19.5 31 Q20 45 32 47 Q44 45 44.5 31 Q41 36 32 36 Q23 36 19.5 31 Z" fill="${hairC}"/>
-                    <path d="M25 35 Q32 33 39 35" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1" fill="none"/>`;
-            } else if (av.facial === 'long_beard') {
-                facialSvg = `<path d="M20 32 Q22 51 32 54 Q42 51 44 32 Q38 36 32 36 Q26 36 20 32 Z" fill="${hairC}"/>`;
-            } else if (av.facial === 'goatee') {
-                facialSvg = `<path d="M27 38 L32 46 L37 38 Q32 40 27 38 Z" fill="${hairC}"/>
-                    <line x1="28.5" y1="36.2" x2="35.5" y2="36.2" stroke="#450a0a" stroke-width="1.4" stroke-linecap="round"/>`;
-            } else {
-                facialSvg = `<line x1="28" y1="36.2" x2="36" y2="36.2" stroke="#450a0a" stroke-width="1.5" stroke-linecap="round"/>`;
-            }
-
-            return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" class="shrink-0 rounded-full overflow-hidden" aria-hidden="true">
-                <defs>
-                    <radialGradient id="${uid}_bg" cx="50%" cy="35%" r="70%">
-                        <stop offset="0%" stop-color="#4c1d95"/>
-                        <stop offset="55%" stop-color="#1e1b4b"/>
-                        <stop offset="100%" stop-color="#090d16"/>
-                    </radialGradient>
-                    <linearGradient id="${uid}_gold" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stop-color="#fef08a"/>
-                        <stop offset="50%" stop-color="#f59e0b"/>
-                        <stop offset="100%" stop-color="#b45309"/>
-                    </linearGradient>
-                    <clipPath id="${uid}_clip"><circle cx="32" cy="32" r="29"/></clipPath>
-                </defs>
-                <circle cx="32" cy="32" r="30" fill="url(#${uid}_bg)"/>
-                <g clip-path="url(#${uid}_clip)">
-                    <!-- Ortaçağ Kale Silueti Arka Plan -->
-                    <path d="M6 52 V32 H10 V28 H13 V32 H16 V28 H19 V44 H45 V24 H48 V20 H52 V24 H56 V20 H59 V52 Z" fill="#0f172a" fill-opacity="0.52"/>
-                    <rect x="49" y="32" width="2" height="4" fill="#fbbf24" fill-opacity="0.35"/>
-                    <rect x="11" y="37" width="2" height="3" fill="#fbbf24" fill-opacity="0.3"/>
-                    ${backHairSvg}
-                    ${outfitSvg}
-                    ${headSvg}
-                    ${headTopSvg}
-                    ${eyesSvg}
-                    ${facialSvg}
-                </g>
-                <circle cx="32" cy="32" r="30.2" fill="none" stroke="url(#${uid}_gold)" stroke-width="2.8"/>
-                <circle cx="32" cy="32" r="28" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="1"/>
-            </svg>`;
-        }
-
-        const WOD_ACTIVE_PROFILE_KEY = 'wod_active_profile_v2';
-        const WOD_SAVED_PROFILES_KEY = 'wod_saved_profiles_v2';
-
-        function loadActiveLocalProfile() {
-            try {
-                const raw = JSON.parse(localStorage.getItem(WOD_ACTIVE_PROFILE_KEY) || 'null');
-                if (!raw || typeof raw !== 'object') return null;
-                return {
-                    name: String(raw.name || '').trim().slice(0, 22),
-                    color: typeof raw.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.color) ? raw.color : BANNER_COLORS[0].hex,
-                    avatar: sanitizeAvatar(raw.avatar, 0)
-                };
-            } catch (e) { return null; }
-        }
-
-        function saveActiveLocalProfile(profile) {
-            try {
-                localStorage.setItem(WOD_ACTIVE_PROFILE_KEY, JSON.stringify({
-                    name: String(profile?.name || '').trim().slice(0, 22),
-                    color: profile?.color || BANNER_COLORS[0].hex,
-                    avatar: sanitizeAvatar(profile?.avatar, 0)
-                }));
-            } catch (e) {}
-        }
-
-        function loadSavedLocalProfiles() {
-            try {
-                const arr = JSON.parse(localStorage.getItem(WOD_SAVED_PROFILES_KEY) || '[]');
-                if (!Array.isArray(arr)) return [];
-                return arr.map((item, idx) => ({
-                    id: String(item?.id || `prof_${idx}`),
-                    name: String(item?.name || 'Hükümdar').trim().slice(0, 22) || 'Hükümdar',
-                    color: typeof item?.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(item.color) ? item.color : BANNER_COLORS[0].hex,
-                    avatar: sanitizeAvatar(item?.avatar, idx)
-                }));
-            } catch (e) { return []; }
-        }
-
-        function saveNamedLocalProfile(name, color, avatar) {
-            const cleanName = String(name || '').trim().slice(0, 22) || 'Hükümdar';
-            const cleanColor = /^#[0-9a-fA-F]{6}$/.test(String(color || '')) ? color : BANNER_COLORS[0].hex;
-            const cleanAvatar = sanitizeAvatar(avatar, 0);
-            const list = loadSavedLocalProfiles();
-            const existingIdx = list.findIndex(p => p.name.toLocaleLowerCase('tr-TR') === cleanName.toLocaleLowerCase('tr-TR'));
-            const entry = {
-                id: existingIdx !== -1 ? list[existingIdx].id : `prof_${Date.now().toString(36)}`,
-                name: cleanName,
-                color: cleanColor,
-                avatar: cleanAvatar
-            };
-            if (existingIdx !== -1) list[existingIdx] = entry;
-            else list.unshift(entry);
-            try {
-                localStorage.setItem(WOD_SAVED_PROFILES_KEY, JSON.stringify(list.slice(0, 12)));
-            } catch (e) {}
-            saveActiveLocalProfile(entry);
-            return entry;
-        }
-
-        function deleteSavedLocalProfile(profileId) {
-            const list = loadSavedLocalProfiles().filter(p => p.id !== profileId);
-            try {
-                localStorage.setItem(WOD_SAVED_PROFILES_KEY, JSON.stringify(list));
-            } catch (e) {}
-        }
-
-        let myAvatar = (() => {
-            const active = loadActiveLocalProfile();
-            if (active && active.avatar) return active.avatar;
-            return getDefaultAvatar(0);
-        })();
-
-        function saveMyAvatar(av) {
-            myAvatar = sanitizeAvatar(av, 0);
-            const nameVal = document.getElementById('input-player-name')?.value?.trim() || myName;
-            saveActiveLocalProfile({ name: nameVal, color: myColor, avatar: myAvatar });
-        }
-
-        function onLobbyProfileNameInput() {
-            const nameVal = document.getElementById('input-player-name')?.value?.trim() || '';
-            if (nameVal) myName = nameVal;
-            saveActiveLocalProfile({ name: nameVal || myName, color: myColor, avatar: myAvatar });
-        }
-
-        function renderSavedLobbyProfiles() {
-            const wrap = document.getElementById('lobby-saved-profiles-wrap');
-            const listEl = document.getElementById('lobby-saved-profiles');
-            if (!wrap || !listEl) return;
-            const profiles = loadSavedLocalProfiles();
-            wrap.classList.toggle('hidden', profiles.length === 0);
-            listEl.innerHTML = profiles.map(pr => `
-                <div class="flex items-center gap-1 bg-slate-950/90 border border-slate-700 hover:border-amber-400/70 rounded-full pl-1 pr-2 py-0.5 text-[11px] transition">
-                    <button type="button" onclick="applySavedLobbyProfile('${pr.id}')" class="flex items-center gap-1.5 font-semibold text-slate-200 hover:text-amber-300">
-                        ${renderAvatarSvg(pr.avatar, 22, pr.color)}
-                        <span class="max-w-[90px] truncate">${pr.name}</span>
-                    </button>
-                    <button type="button" onclick="removeSavedLobbyProfile('${pr.id}')" class="text-slate-500 hover:text-rose-400 text-[10px] ml-0.5" title="Profili Sil">✕</button>
-                </div>
-            `).join('');
-        }
-
-        function saveCurrentLobbyProfile() {
-            const nameVal = document.getElementById('input-player-name')?.value?.trim() || myName;
-            myName = nameVal;
-            saveNamedLocalProfile(nameVal, myColor, myAvatar);
-            renderSavedLobbyProfiles();
-            const msg = document.getElementById('lobby-profile-save-msg');
-            if (msg) {
-                msg.classList.remove('hidden');
-                setTimeout(() => msg.classList.add('hidden'), 1800);
-            }
-        }
-
-        function applySavedLobbyProfile(profileId) {
-            const pr = loadSavedLocalProfiles().find(p => p.id === profileId);
-            if (!pr) return;
-            myName = pr.name;
-            myColor = pr.color;
-            myAvatar = sanitizeAvatar(pr.avatar, 0);
-            const inp = document.getElementById('input-player-name');
-            if (inp) inp.value = myName;
-            saveActiveLocalProfile({ name: myName, color: myColor, avatar: myAvatar });
-            renderColorPicker();
-            renderLobbyAvatarStudio();
-        }
-
-        function removeSavedLobbyProfile(profileId) {
-            deleteSavedLocalProfile(profileId);
-            renderSavedLobbyProfiles();
-        }
-
-        function renderLobbyAvatarStudio() {
-            const previewEl = document.getElementById('lobby-avatar-preview');
-            if (previewEl) previewEl.innerHTML = renderAvatarSvg(myAvatar, 80, myColor);
-            const sectionsEl = document.getElementById('lobby-avatar-sections');
-            if (!sectionsEl) return;
-
-            const makeSwatchSection = (field, label, dict) => {
-                const btns = Object.entries(dict).map(([k, v]) => {
-                    const bgHex = v.fill || v.hex;
-                    const active = myAvatar[field] === k;
-                    return `<button type="button" onclick="updateLobbyAvatarField('${field}', '${k}')"
-                        class="av-swatch ${active ? 'av-swatch-active' : 'opacity-80 hover:opacity-100'}"
-                        style="background:${bgHex}" title="${v.label}"></button>`;
-                }).join('');
-                return `<div>
-                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">${label}</div>
-                    <div class="flex flex-wrap items-center gap-2">${btns}</div>
-                </div>`;
-            };
-
-            const makePillSection = (field, label, dict) => {
-                const btns = Object.entries(dict).map(([k, txt]) => {
-                    const active = myAvatar[field] === k;
-                    return `<button type="button" onclick="updateLobbyAvatarField('${field}', '${k}')"
-                        class="av-pill ${active ? 'av-pill-active' : ''}">${txt}</button>`;
-                }).join('');
-                return `<div>
-                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">${label}</div>
-                    <div class="flex flex-wrap gap-1.5">${btns}</div>
-                </div>`;
-            };
-
-            sectionsEl.innerHTML = [
-                makeSwatchSection('skin', 'TEN RENGİ', AVATAR_SKIN_TONES),
-                makePillSection('bodyType', 'GÖVDE TİPİ', AVATAR_BODY_TYPES),
-                makePillSection('headgear', 'SAÇ / BAŞLIK', AVATAR_HEADGEAR),
-                makeSwatchSection('hairColor', 'SAÇ / BIYIK RENGİ', AVATAR_HAIR_COLORS),
-                makePillSection('eyes', 'BAKIŞ &amp; AKSESUAR', AVATAR_EYES),
-                makePillSection('facial', 'İFADE &amp; SAKAL', AVATAR_FACIAL),
-                makePillSection('outfit', 'KIYAFET TARZI', AVATAR_OUTFITS),
-                makeSwatchSection('outfitColor', 'KIYAFET RENGİ', AVATAR_OUTFIT_COLORS)
-            ].join('');
-        }
-
-        function updateLobbyAvatarField(field, value) {
-            saveMyAvatar({ ...myAvatar, [field]: value });
-            renderLobbyAvatarStudio();
-        }
-
-        function randomizeLobbyAvatar() {
-            saveMyAvatar(randomizeAvatar());
-            renderLobbyAvatarStudio();
-        }
-
-        let peerInstance = null;
-        let hostConnections = new Map(); // peerId -> DataConnection (Sadece Host tutar)
-        let hostConnectionPlayers = new Map();
-        let clientToHostConn = null;     // DataConnection (Sadece Client tutar)
-        let localBroadcastChannel = null;
-        let joinRetryInterval = null;
-        let processedMsgIds = new Set();
-
-        // Oyun & Lobi Durumu (Host tarafından senkronize edilir)
-        let roomState = {
-            status: 'LOBBY', // 'LOBBY' | 'PLAYING'
-            mapSeed: 12345,
-            turnNumber: 1,
-            activePlayerIndex: 0,
-            phase: 'ROLL',   // 'ROLL' | 'MOVE_AND_ACT'
-            gameSessionId: null,
-            currentDice: 0,
-            remainingAP: 0,
-            players: [],     // { peerId, name, color, ready, isHost, gold, wood, iron, q, r, cityQ, cityR }
-            walls: [],       // { key, ownerPeerId, color, q, r, dir }
-            consumedChanceKeys: []
-        };
-
-        let pendingIncomingOffer = null;
-
-        // Renk seçiciyi hazırla
-        function initLobbyControls() {
-            const rndSuffix = Math.floor(Math.random() * 90 + 10);
-            const urlParams = new URLSearchParams(window.location.search);
-            const autoRoom = urlParams.get('room');
-            const savedProfile = loadActiveLocalProfile();
-
-            if (!autoRoom && savedProfile && savedProfile.name) {
-                myColor = savedProfile.color;
-                myName = savedProfile.name;
-                myAvatar = sanitizeAvatar(savedProfile.avatar, 0);
-            } else {
-                const defaultColorIdx = autoRoom ? (Math.floor(Math.random() * (BANNER_COLORS.length - 1)) + 1) : 0;
-                myColor = BANNER_COLORS[defaultColorIdx].hex;
-                myName = `${BANNER_COLORS[defaultColorIdx].name} #${rndSuffix}`;
-            }
-            document.getElementById('input-player-name').value = myName;
-
-            const brandEmblem = document.getElementById('lobby-brand-emblem');
-            if (brandEmblem) brandEmblem.innerHTML = getGameLogoSvg(40);
-            renderSavedLobbyProfiles();
-            renderLobbyAvatarStudio();
-            renderColorPicker();
-
-            // localStorage Sekmeler Arası Yedek Köprü Dinleyicisi
-            window.addEventListener('storage', (ev) => {
-                if (!currentRoomCode) return;
-                if (ev.key === `wod_net_pkt_${currentRoomCode}` && ev.newValue) {
-                    try {
-                        const pkt = JSON.parse(ev.newValue);
-                        handleIncomingNetworkPacket(pkt);
-                    } catch (err) {}
-                }
-            });
-
-            if (autoRoom) {
-                document.getElementById('input-room-code').value = autoRoom;
-                setTimeout(() => joinMultiplayerRoom(), 150);
-            }
-        }
-
-        function renderColorPicker() {
-            const row = document.getElementById('color-picker-row');
-            row.innerHTML = BANNER_COLORS.map(c => `
-                <button type="button" onclick="selectBannerColor('${c.hex}', '${c.name}')"
-                    class="av-swatch ${myColor === c.hex ? 'av-swatch-active' : 'opacity-70 hover:opacity-100'}"
-                    style="background:${c.hex}" title="${c.name}"></button>
-            `).join('');
-        }
-
-        function selectBannerColor(hex, defaultTitle) {
-            myColor = hex;
-            const nameInput = document.getElementById('input-player-name');
-            if (nameInput && nameInput.value.includes('#')) {
-                const num = nameInput.value.split('#')[1];
-                nameInput.value = `${defaultTitle} #${num}`;
-            }
-            myName = nameInput?.value?.trim() || myName;
-            saveActiveLocalProfile({ name: myName, color: myColor, avatar: myAvatar });
-            renderColorPicker();
-            renderLobbyAvatarStudio();
-        }
-
-        function setNetStatus(text, tone = 'slate') {
-            const pill = document.getElementById('net-status-pill');
-            if (!pill) return;
-            const colors = {
-                slate: 'bg-slate-800 text-slate-300',
-                emerald: 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300',
-                amber: 'bg-amber-500/20 border border-amber-400/40 text-amber-300',
-                rose: 'bg-rose-500/20 border border-rose-400/40 text-rose-300'
-            };
-            pill.className = `px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${colors[tone] || colors.slate}`;
-            pill.textContent = text;
-        }
-
-        // =========================================================================
-        // 2. ODA KURMA (HOST) VE ODAYA KATILMA (CLIENT)
-        // =========================================================================
-        function createMultiplayerRoom() {
-            myName = document.getElementById('input-player-name').value.trim() || 'Kızıl Aslan';
-            currentRoomCode = String(Math.floor(1000 + Math.random() * 9000));
-            isHost = true;
-            hasEnteredPlayingScreen = false;
-
-            roomState = {
-                status: 'LOBBY',
-                mapSeed: Math.floor(Math.random() * 899999 + 100000),
-                turnNumber: 1,
-                activePlayerIndex: 0,
-                phase: 'ROLL',
-                gameSessionId: null,
-                currentDice: 0,
-                remainingAP: 0,
-                players: [{
-                    peerId: myPeerId,
-                    name: myName,
-                    color: myColor,
-                    avatar: sanitizeAvatar(myAvatar, 0),
-                    ready: false, // Oyuncu "Hazır Ver" butonuna basarak hazır olur
-                    isHost: true,
-                    gold: 8,
-                    wood: 3,
-                    iron: 1,
-                    q: 0,
-                    r: 0,
-                    cityQ: 0,
-                    cityR: 0
-                }],
-                walls: [],
-                consumedChanceKeys: []
-            };
-
-            setupLocalBroadcastChannel(currentRoomCode);
-            setupPeerJSHost(currentRoomCode);
-            showActiveLobbyScreen();
-            setNetStatus(`🌐 Oda Açık (#${currentRoomCode})`, 'emerald');
-            appendLog(`👑 <b>${myName}</b> tarafından <b>#${currentRoomCode}</b> numaralı oda kuruldu.`);
-        }
-
-        function joinMultiplayerRoom() {
-            const code = document.getElementById('input-room-code').value.trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
-            if (!code) {
-                alert('Lütfen 4 haneli Oda Kodunu girin!');
-                return;
-            }
-            myName = document.getElementById('input-player-name').value.trim() || 'Safir Kartal';
-            currentRoomCode = code;
-            isHost = false;
-            hasEnteredPlayingScreen = false;
-
-            // Misafir oyuncuyu yerel listede hemen göster (Host yanıtı gelene kadar boş görünmesin)
-            roomState = {
-                status: 'LOBBY',
-                mapSeed: 12345,
-                turnNumber: 1,
-                activePlayerIndex: 0,
-                phase: 'ROLL',
-                gameSessionId: null,
-                currentDice: 0,
-                remainingAP: 0,
-                players: [{
-                    peerId: myPeerId,
-                    name: myName,
-                    color: myColor,
-                    avatar: sanitizeAvatar(myAvatar, 1),
-                    ready: false,
-                    isHost: false,
-                    gold: 8,
-                    wood: 3,
-                    iron: 1,
-                    q: 0,
-                    r: 0,
-                    cityQ: 0,
-                    cityR: 0
-                }],
-                walls: [],
-                consumedChanceKeys: []
-            };
-
-            setNetStatus(`#${code} Odasına Bağlanılıyor...`, 'amber');
-            setupLocalBroadcastChannel(currentRoomCode);
-            setupPeerJSClient(currentRoomCode);
-            showActiveLobbyScreen();
-
-            const sendJoinReq = () => {
-                sendPacketToHost({
-                    type: 'JOIN_REQUEST',
-                    player: {
-                        peerId: myPeerId,
-                        name: myName,
-                        color: myColor,
-                        avatar: sanitizeAvatar(myAvatar, 1)
-                    }
-                });
-            };
-
-            sendJoinReq();
-
-            // Host'tan senkronizasyon gelene kadar her 800ms'de bir katılma isteğini tekrarla
-            if (joinRetryInterval) clearInterval(joinRetryInterval);
-            joinRetryInterval = setInterval(() => {
-                const hostPresent = roomState.players.some(p => p.isHost);
-                if (hostPresent || roomState.status === 'PLAYING') {
-                    clearInterval(joinRetryInterval);
-                    joinRetryInterval = null;
-                } else {
-                    sendJoinReq();
-                }
-            }, 800);
-        }
-
-        function setupLocalBroadcastChannel(roomCode) {
-            if (localBroadcastChannel) localBroadcastChannel.close();
-            if ('BroadcastChannel' in window) {
-                localBroadcastChannel = new BroadcastChannel(`wod_online_room_${roomCode}`);
-                localBroadcastChannel.onmessage = (ev) => {
-                    handleIncomingNetworkPacket(ev.data);
-                };
-            }
-        }
-
-        function setupPeerJSHost(roomCode) {
-            if (typeof Peer === 'undefined') {
-                setNetStatus('Yerel Sekme Modu Aktif', 'emerald');
-                return;
-            }
-            try {
-                if (peerInstance) peerInstance.destroy();
-                const hostPeerId = `wod-room-${roomCode.toLowerCase()}`;
-                peerInstance = new Peer(hostPeerId);
-
-                peerInstance.on('open', () => {
-                    setNetStatus(`🌐 Canlı Oda Hazır (#${roomCode})`, 'emerald');
-                });
-
-                peerInstance.on('connection', (conn) => {
-                    conn.on('open', () => {
-                        hostConnections.set(conn.peer, conn);
-                        // Bağlanan oyuncuya anında mevcut oda durumunu gönder
-                        conn.send({
-                            type: 'ROOM_STATE_SYNC',
-                            msgId: 'm_init_' + Date.now(),
-                            state: roomState
-                        });
-                    });
-                    conn.on('data', (data) => {
-                        handleIncomingNetworkPacket(data, conn);
-                    });
-                    conn.on('close', () => {
-                        hostConnections.delete(conn.peer);
-                        const peerId = hostConnectionPlayers.get(conn.peer);
-                        hostConnectionPlayers.delete(conn.peer);
-                        if (!isLeavingRoom && peerId &&
-                            !Array.from(hostConnectionPlayers.values()).includes(peerId)) {
-                            removeLobbyPlayer(peerId);
-                        }
-                    });
-                });
-
-                peerInstance.on('error', () => {
-                    setNetStatus('Yerel Sekme + Yedek Kanal Aktif', 'emerald');
-                });
-            } catch (e) {
-                setNetStatus('Yerel Sekme Kanalı Aktif', 'emerald');
-            }
-        }
-
-        function setupPeerJSClient(roomCode) {
-            if (typeof Peer === 'undefined') return;
-            try {
-                if (peerInstance) peerInstance.destroy();
-                peerInstance = new Peer();
-
-                peerInstance.on('open', () => {
-                    const hostPeerId = `wod-room-${roomCode.toLowerCase()}`;
-                    const conn = peerInstance.connect(hostPeerId, { reliable: true });
-                    clientToHostConn = conn;
-
-                    conn.on('open', () => {
-                        setNetStatus(`🌐 Odaya Bağlandı (#${roomCode})`, 'emerald');
-                        sendPacketToHost({
-                            type: 'JOIN_REQUEST',
-                            player: {
-                                peerId: myPeerId,
-                                name: myName,
-                                color: myColor,
-                                avatar: sanitizeAvatar(myAvatar, 1)
-                            }
-                        });
-                    });
-
-                    conn.on('data', (data) => {
-                        handleIncomingNetworkPacket(data);
-                    });
-                    conn.on('close', () => {
-                        if (isLeavingRoom || !currentRoomCode) return;
-                        setNetStatus('Oda bağlantısı kesildi; ana menüye dönülüyor.', 'rose');
-                        const cleanUrl = new URL(window.location.href);
-                        cleanUrl.search = '';
-                        cleanUrl.hash = '';
-                        setTimeout(() => window.location.replace(cleanUrl.href), 1000);
-                    });
-                });
-            } catch (e) {
-                console.warn('PeerJS client fallback:', e);
-            }
-        }
-
-        // Paket Gönderme Yardımcıları (BroadcastChannel + localStorage + WebRTC PeerJS)
-        function emitOverLocalChannels(packet) {
-            let sent = false;
-            if (localBroadcastChannel) {
-                try {
-                    localBroadcastChannel.postMessage(packet);
-                    sent = true;
-                } catch (error) {
-                    console.error('Local room packet could not be broadcast.', error);
-                }
-            }
-            if (currentRoomCode) {
-                try {
-                    localStorage.setItem(`wod_net_pkt_${currentRoomCode}`, JSON.stringify(packet));
-                    sent = true;
-                } catch (error) {
-                    console.error('Room packet could not be stored for local delivery.', error);
-                }
-            }
-            return sent;
-        }
-
-        function broadcastPacketFromHost(packet) {
-            packet.msgId = packet.msgId || ('m_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now());
-            processedMsgIds.add(packet.msgId);
-
-            emitOverLocalChannels(packet);
-            hostConnections.forEach(conn => {
-                if (conn && conn.open) {
-                    try { conn.send(packet); } catch (e) {}
-                }
-            });
-        }
-
-        function sendPacketToHost(packet) {
-            packet.msgId = packet.msgId || ('m_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now());
-            if (isHost) {
-                handleIncomingNetworkPacket(packet);
-                return true;
-            }
-            processedMsgIds.add(packet.msgId);
-            let sent = emitOverLocalChannels(packet);
-            if (clientToHostConn && clientToHostConn.open) {
-                try {
-                    clientToHostConn.send(packet);
-                    sent = true;
-                } catch (error) {
-                    console.error('Room host packet could not be sent.', error);
-                }
-            }
-            return sent;
-        }
-
-        // =========================================================================
-        // 3. AĞ PAKETLERİNİ İŞLEME (HOST OTORİTESİ & SENKRONİZASYON)
-        // =========================================================================
-        function handleIncomingNetworkPacket(packet, connection = null) {
-            if (!packet || !packet.type) return;
-            if (packet.msgId && processedMsgIds.has(packet.msgId)) return;
-            if (packet.msgId) processedMsgIds.add(packet.msgId);
-
-            // --- SADECE HOST TARAFINDAN İŞLENEN İSTEKLER ---
-            if (isHost) {
-                if (packet.type === 'JOIN_REQUEST') {
-                    const pInfo = packet.player;
-                    if (!pInfo || typeof pInfo.peerId !== 'string') return;
-                    if (connection) hostConnectionPlayers.set(connection.peer, pInfo.peerId);
-                    let existing = roomState.players.find(x => x.peerId === pInfo.peerId);
-                    if (!existing && roomState.players.length < 6) {
-                        const usedColors = roomState.players.map(x => x.color);
-                        let assignedColor = pInfo.color;
-                        if (usedColors.includes(assignedColor)) {
-                            const freeC = BANNER_COLORS.find(c => !usedColors.includes(c.hex));
-                            if (freeC) assignedColor = freeC.hex;
-                        }
-                        roomState.players.push({
-                            peerId: pInfo.peerId,
-                            name: pInfo.name,
-                            color: assignedColor,
-                            avatar: sanitizeAvatar(pInfo.avatar, roomState.players.length),
-                            ready: false,
-                            isHost: false,
-                            gold: 8,
-                            wood: 3,
-                            iron: 1,
-                            q: 0,
-                            r: 0,
-                            cityQ: 0,
-                            cityR: 0
-                        });
-                        const joinLog = `🎉 <b>${pInfo.name}</b> odaya katıldı!`;
-                        appendLog(joinLog);
-                        broadcastPacketFromHost({ type: 'SYSTEM_LOG', html: joinLog });
-                    }
-                    syncRoomStateToAll();
-                    return;
-                }
-
-                if (packet.type === 'LEAVE_REQUEST') {
-                    const authenticatedPeerId = connection
-                        ? hostConnectionPlayers.get(connection.peer)
-                        : packet.peerId;
-                    if (authenticatedPeerId && authenticatedPeerId === packet.peerId) {
-                        removeLobbyPlayer(authenticatedPeerId);
-                        if (connection) hostConnectionPlayers.delete(connection.peer);
-                    }
-                    return;
-                }
-
-                if (packet.type === 'ROOM_CLOSED') return;
-
-                if (packet.type === 'SET_READY') {
-                    const pl = roomState.players.find(x => x.peerId === packet.peerId);
-                    if (pl) {
-                        pl.ready = Boolean(packet.ready);
-                        const readyLog = pl.ready
-                            ? `✅ <b>${pl.name}</b> hazır olduğunu bildirdi!`
-                            : `⏳ <b>${pl.name}</b> hazır durumunu iptal etti.`;
-                        appendLog(readyLog);
-                        broadcastPacketFromHost({ type: 'SYSTEM_LOG', html: readyLog });
-                        syncRoomStateToAll();
-                    }
-                    return;
-                }
-
-                if (packet.type === 'CHAT_MSG') {
-                    const sender = roomState.players.find(player => player.peerId === packet.peerId);
-                    const text = String(packet.text || '').trim().slice(0, 240);
-                    if (!sender || !text) return;
-                    const chatPacket = {
-                        ...packet,
-                        peerId: sender.peerId,
-                        sender: sender.name,
-                        text
-                    };
-                    appendChatMessage(sender.name, text);
-                    broadcastPacketFromHost(chatPacket);
-                    return;
-                }
-
-                if (packet.type === 'QUICK_REACTION') {
-                    const sender = roomState.players.find(player => player.peerId === packet.peerId);
-                    const emoji = String(packet.emoji || '');
-                    if (!sender || !['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
-                    const reactionPacket = { ...packet, peerId: sender.peerId, sender: sender.name, emoji };
-                    spawnFloatingReaction(emoji, sender.name);
-                    broadcastPacketFromHost(reactionPacket);
-                    return;
-                }
-
-                if (packet.type === 'ACTION_ROLL_DICE') {
-                    const activeP = roomState.players[roomState.activePlayerIndex];
-                    if (!activeP || activeP.peerId !== packet.peerId || roomState.phase !== 'ROLL') return;
-
-                    const rolled = Math.floor(Math.random() * 6) + 1;
-                    roomState.currentDice = rolled;
-                    roomState.remainingAP = rolled;
-                    roomState.phase = 'MOVE_AND_ACT';
-
-                    const rollPacket = {
-                        type: 'EVENT_DICE_ROLLED',
-                        playerName: activeP.name,
-                        rolled,
-                        state: JSON.parse(JSON.stringify(roomState))
-                    };
-                    broadcastPacketFromHost(rollPacket);
-                    playSynchronizedDiceAnimation(activeP.name, rolled, () => {
-                        applyRoomStateUpdate(rollPacket.state);
-                    });
-                    return;
-                }
-
-                if (packet.type === 'ACTION_MOVE_PAWN') {
-                    const activeP = roomState.players[roomState.activePlayerIndex];
-                    if (!activeP || activeP.peerId !== packet.peerId || roomState.phase !== 'MOVE_AND_ACT') return;
-
-                    if (grid.size === 0) generateSyncedMap(roomState.mapSeed);
-                    const targetHex = grid.get(`${packet.q},${packet.r}`);
-                    if (!targetHex || packet.cost > roomState.remainingAP) return;
-
-                    roomState.remainingAP -= packet.cost;
-                    activeP.q = packet.q;
-                    activeP.r = packet.r;
-
-                    let bonusLog = '';
-                    if (targetHex.poi === 'Maden') {
-                        activeP.iron += 1;
-                        bonusLog = ` (⛏️ Maden ziyareti: +1 Demir!)`;
-                    } else if (targetHex.poi === 'Oduncu') {
-                        activeP.wood += 1;
-                        bonusLog = ` (🪵 Oduncu ziyareti: +1 Odun!)`;
-                    } else if (targetHex.poi === 'Sans') {
-                        targetHex.poi = null;
-                        if (!roomState.consumedChanceKeys.includes(targetHex.key)) {
-                            roomState.consumedChanceKeys.push(targetHex.key);
-                        }
-                        activeP.gold += 3;
-                        bonusLog = ` (❓ Şans Hücresi açıldı: Hazine Sandığı +3 Altın!)`;
-                    }
-
-                    const movePacket = {
-                        type: 'EVENT_PAWN_MOVED',
-                        peerId: activeP.peerId,
-                        playerName: activeP.name,
-                        q: packet.q,
-                        r: packet.r,
-                        bonusLog,
-                        state: JSON.parse(JSON.stringify(roomState))
-                    };
-                    broadcastPacketFromHost(movePacket);
-                    handlePawnMoveEvent(movePacket);
-                    return;
-                }
-
-                if (packet.type === 'ACTION_PLACE_WALL') {
-                    const activeP = roomState.players[roomState.activePlayerIndex];
-                    if (!activeP || activeP.peerId !== packet.peerId) return;
-                    if (activeP.gold < 2 || activeP.wood < 2) return;
-                    if (roomState.walls.some(w => w.key === packet.edgeKey)) return;
-
-                    activeP.gold -= 2;
-                    activeP.wood -= 2;
-                    roomState.walls.push({
-                        key: packet.edgeKey,
-                        ownerPeerId: activeP.peerId,
-                        color: activeP.color,
-                        q: packet.q,
-                        r: packet.r,
-                        dir: packet.dir
-                    });
-
-                    const wallPacket = {
-                        type: 'EVENT_WALL_PLACED',
-                        playerName: activeP.name,
-                        state: JSON.parse(JSON.stringify(roomState))
-                    };
-                    broadcastPacketFromHost(wallPacket);
-                    appendLog(`🧱 <b>${activeP.name}</b> haritaya yeni bir sınır duvarı inşa etti (-2A, -2O).`);
-                    applyRoomStateUpdate(wallPacket.state);
-                    return;
-                }
-
-                if (packet.type === 'ACTION_END_TURN') {
-                    const activeP = roomState.players[roomState.activePlayerIndex];
-                    if (!activeP || activeP.peerId !== packet.peerId) return;
-
-                    roomState.activePlayerIndex = (roomState.activePlayerIndex + 1) % roomState.players.length;
-                    if (roomState.activePlayerIndex === 0) {
-                        roomState.turnNumber++;
-                        roomState.players.forEach(pl => { pl.gold += 2; });
-                    }
-                    roomState.phase = 'ROLL';
-                    roomState.currentDice = 0;
-                    roomState.remainingAP = 0;
-
-                    const nextP = roomState.players[roomState.activePlayerIndex];
-                    const turnPacket = {
-                        type: 'EVENT_TURN_CHANGED',
-                        nextPlayerName: nextP.name,
-                        turnNumber: roomState.turnNumber,
-                        state: JSON.parse(JSON.stringify(roomState))
-                    };
-                    broadcastPacketFromHost(turnPacket);
-                    appendLog(`🚩 <b>SIRA GEÇTİ:</b> Şimdi hamle sırası <b>${nextP.name}</b> krallığında! (Tur ${roomState.turnNumber})`);
-                    applyRoomStateUpdate(turnPacket.state);
-                    return;
-                }
-
-                if (packet.type === 'LIVE_TRADE_OFFER') {
-                    broadcastPacketFromHost(packet);
-                    if (packet.toPeerId === myPeerId) {
-                        showIncomingTradeModal(packet);
-                    }
-                    return;
-                }
-
-                if (packet.type === 'LIVE_TRADE_RESPONSE') {
-                    if (packet.accepted) {
-                        const sender = roomState.players.find(x => x.peerId === packet.offer.fromPeerId);
-                        const receiver = roomState.players.find(x => x.peerId === packet.offer.toPeerId);
-                        if (sender && receiver) {
-                            const o = packet.offer;
-                            if (sender.gold >= o.giveGold && sender.wood >= o.giveWood && sender.iron >= o.giveIron &&
-                                receiver.gold >= o.takeGold && receiver.wood >= o.takeWood && receiver.iron >= o.takeIron) {
-                                sender.gold = sender.gold - o.giveGold + o.takeGold + 1;
-                                sender.wood = sender.wood - o.giveWood + o.takeWood;
-                                sender.iron = sender.iron - o.giveIron + o.takeIron;
-
-                                receiver.gold = receiver.gold - o.takeGold + o.giveGold + 1;
-                                receiver.wood = receiver.wood - o.takeWood + o.giveWood;
-                                receiver.iron = receiver.iron - o.takeIron + o.giveIron;
-                            }
-                        }
-                    }
-                    packet.state = JSON.parse(JSON.stringify(roomState));
-                    broadcastPacketFromHost(packet);
-                    handleTradeResultPacket(packet);
-                    return;
-                }
-            }
-
-            // --- TÜM OYUNCULAR (CLIENT) TARAFINDAN İŞLENEN PAKETLER ---
-            if (packet.type === 'ROOM_STATE_SYNC') {
-                setNetStatus(`🌐 Senkronize (#${currentRoomCode})`, 'emerald');
-                applyRoomStateUpdate(packet.state);
-            }
-            else if (packet.type === 'ROOM_CLOSED') {
-                setNetStatus('Oda sahibi odayı kapattı.', 'rose');
-                const cleanUrl = new URL(window.location.href);
-                cleanUrl.search = '';
-                cleanUrl.hash = '';
-                setTimeout(() => window.location.replace(cleanUrl.href), 150);
-            }
-            else if (packet.type === 'SYSTEM_LOG') {
-                appendLog(packet.html);
-            }
-            else if (packet.type === 'CHAT_MSG') {
-                const sender = roomState.players.find(player => player.peerId === packet.peerId);
-                const text = String(packet.text || '').trim().slice(0, 240);
-                if (sender && text) appendChatMessage(sender.name, text);
-            }
-            else if (packet.type === 'QUICK_REACTION') {
-                const sender = roomState.players.find(player => player.peerId === packet.peerId);
-                const emoji = String(packet.emoji || '');
-                if (sender && ['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) {
-                    spawnFloatingReaction(emoji, sender.name);
-                }
-            }
-            else if (packet.type === 'EVENT_DICE_ROLLED') {
-                playSynchronizedDiceAnimation(packet.playerName, packet.rolled, () => {
-                    applyRoomStateUpdate(packet.state);
-                });
-            }
-            else if (packet.type === 'EVENT_PAWN_MOVED') {
-                handlePawnMoveEvent(packet);
-            }
-            else if (packet.type === 'EVENT_WALL_PLACED') {
-                appendLog(`🧱 <b>${packet.playerName}</b> haritaya yeni bir sınır duvarı inşa etti (-2A, -2O).`);
-                applyRoomStateUpdate(packet.state);
-            }
-            else if (packet.type === 'EVENT_TURN_CHANGED') {
-                appendLog(`🚩 <b>SIRA GEÇTİ:</b> Şimdi hamle sırası <b>${packet.nextPlayerName}</b> krallığında! (Tur ${packet.turnNumber})`);
-                applyRoomStateUpdate(packet.state);
-            }
-            else if (packet.type === 'LIVE_TRADE_OFFER') {
-                if (packet.toPeerId === myPeerId) {
-                    showIncomingTradeModal(packet);
-                }
-            }
-            else if (packet.type === 'LIVE_TRADE_RESPONSE') {
-                handleTradeResultPacket(packet);
-            }
-        }
-
-        function syncRoomStateToAll() {
-            const snapshot = JSON.parse(JSON.stringify(roomState));
-            broadcastPacketFromHost({
-                type: 'ROOM_STATE_SYNC',
-                state: snapshot
-            });
-            applyRoomStateUpdate(snapshot);
-        }
-
-        // =========================================================================
-        // 4. LOBİ ARAYÜZÜ, HAZIR VERME VE OYUN BAŞLATMA
-        // =========================================================================
-        function showActiveLobbyScreen() {
-            document.getElementById('lobby-entry-view').classList.add('hidden');
-            document.getElementById('lobby-room-view').classList.remove('hidden');
-            document.getElementById('display-room-code').textContent = currentRoomCode;
-            document.getElementById('hud-room-code').textContent = currentRoomCode;
-            document.getElementById('room-role-badge').textContent = isHost
-                ? '👑 Oda Kurucusu (Host — Oyun Yöneticisi)'
-                : '🛡️ Misafir Krallık (Odaya Bağlı)';
-            renderLobbyPlayers();
-        }
-
-        function renderLobbyPlayers() {
-            const listEl = document.getElementById('lobby-players-list');
-            const totalCount = roomState.players.length;
-            const readyCount = roomState.players.filter(p => p.ready).length;
-            const allReady = totalCount > 0 && readyCount === totalCount;
-
-            document.getElementById('lobby-player-count').textContent = totalCount;
-
-            const summaryEl = document.getElementById('lobby-ready-summary');
-            if (summaryEl) {
-                summaryEl.className = `text-[11px] font-bold ${allReady ? 'text-emerald-300' : 'text-amber-300'}`;
-                summaryEl.textContent = allReady
-                    ? `✅ Tüm Oyuncular Hazır (${readyCount}/${totalCount})`
-                    : `⏳ Hazır Oyuncular: ${readyCount}/${totalCount}`;
-            }
-
-            listEl.innerHTML = roomState.players.map((pl, idx) => {
-                const isMe = pl.peerId === myPeerId;
-                const avatarHtml = renderAvatarSvg(sanitizeAvatar(pl.avatar, idx), 38, pl.color);
-                return `
-                    <div class="flex items-center justify-between bg-slate-950/85 border ${isMe ? 'border-amber-400' : 'border-slate-800'} px-4 py-2 rounded-xl">
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs font-bold text-slate-400">#${idx + 1}</span>
-                            ${avatarHtml}
-                            <span class="text-sm font-bold text-white">${pl.name} ${isMe ? '<span class="text-[10px] text-amber-300">(Sen)</span>' : ''}</span>
-                            ${pl.isHost ? '<span class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] text-amber-300 font-bold">👑 HOST</span>' : ''}
-                        </div>
-                        <button type="button" ${isMe ? 'onclick="toggleMyReadyState()"' : 'disabled'}
-                            class="px-3 py-1 rounded-lg text-xs font-bold transition ${pl.ready ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/60' : 'bg-amber-500/15 text-amber-300 border border-amber-500/40'} ${isMe ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}">
-                            ${pl.ready ? '✅ Hazır' : '⏳ Hazır Bekleniyor'}
-                        </button>
-                    </div>
-                `;
-            }).join('');
-
-            // Benim "Hazır Ver / İptal Et" butonumu güncelle
-            const me = roomState.players.find(x => x.peerId === myPeerId);
-            const readyBtn = document.getElementById('btn-toggle-ready');
-            if (readyBtn && me) {
-                if (me.ready) {
-                    readyBtn.className = 'px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-rose-950/80 text-emerald-300 hover:text-rose-200 border border-emerald-400/60 shadow transition';
-                    readyBtn.innerHTML = '✅ Hazırsın! <span class="text-[11px] opacity-80 font-normal">(İptal İçin Tıkla)</span>';
-                } else {
-                    readyBtn.className = 'px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-300 shadow-lg animate-pulse transition';
-                    readyBtn.innerHTML = '✋ Hazır Ver (Hazırım!)';
-                }
-            }
-
-            // Host "Oyunu Başlat" butonu veya Misafir bilgi metni
-            const hostStartBtn = document.getElementById('btn-host-start-game');
-            const guestHint = document.getElementById('guest-waiting-hint');
-            if (isHost) {
-                hostStartBtn.classList.remove('hidden');
-                if (guestHint) guestHint.classList.add('hidden');
-                if (allReady) {
-                    hostStartBtn.textContent = `🚀 Herkes Hazır! Oyunu Başlat (${totalCount} Krallık) →`;
-                } else {
-                    hostStartBtn.textContent = `🎮 Oyunu Başlat (${readyCount}/${totalCount} Hazır) →`;
-                }
-            } else {
-                hostStartBtn.classList.add('hidden');
-                if (guestHint) guestHint.classList.remove('hidden');
-            }
-        }
-
-        function toggleMyReadyState() {
-            const me = roomState.players.find(x => x.peerId === myPeerId);
-            const nextReady = me ? !me.ready : true;
-
-            // Anında yerel UI tepkisi
-            if (me) {
-                me.ready = nextReady;
-                renderLobbyPlayers();
-            }
-
-            sendPacketToHost({
-                type: 'SET_READY',
-                peerId: myPeerId,
-                ready: nextReady
-            });
-        }
-
-        function copyRoomCode() {
-            if (!currentRoomCode) return;
-            navigator.clipboard?.writeText(currentRoomCode);
-            appendLog(`📋 Oda kodu (<b>${currentRoomCode}</b>) panoya kopyalandı!`);
-        }
-
-        function openSecondTabForTesting() {
-            if (!currentRoomCode) return;
-            const targetUrl = new URL(window.location.href);
-            targetUrl.searchParams.set('room', currentRoomCode);
-            window.open(targetUrl.href, '_blank');
-        }
-
-        function leaveRoom() {
-            isLeavingRoom = true;
-            if (isHost) {
-                broadcastPacketFromHost({
-                    type: 'ROOM_CLOSED',
-                    peerId: myPeerId
-                });
-            } else if (currentRoomCode) {
-                sendPacketToHost({
-                    type: 'LEAVE_REQUEST',
-                    peerId: myPeerId
-                });
-            }
-            const cleanUrl = new URL(window.location.href);
-            cleanUrl.search = '';
-            cleanUrl.hash = '';
-            setTimeout(() => {
-                if (joinRetryInterval) clearInterval(joinRetryInterval);
-                if (localBroadcastChannel) localBroadcastChannel.close();
-                if (clientToHostConn) clientToHostConn.close();
-                if (peerInstance && !peerInstance.destroyed) peerInstance.destroy();
-                window.location.replace(cleanUrl.href);
-            }, 150);
-        }
-
-        function removeLobbyPlayer(peerId) {
-            const playerIndex = roomState.players.findIndex(player => player.peerId === peerId);
-            if (playerIndex < 0 || roomState.players[playerIndex].isHost) return;
-            const [player] = roomState.players.splice(playerIndex, 1);
-            if (playerIndex < roomState.activePlayerIndex) roomState.activePlayerIndex--;
-            if (roomState.activePlayerIndex >= roomState.players.length) roomState.activePlayerIndex = 0;
-            const logHtml = `🚪 <b>${escapeHTML(player.name)}</b> odadan ayrıldı.`;
-            appendLog(logHtml);
-            broadcastPacketFromHost({ type: 'SYSTEM_LOG', html: logHtml });
-            syncRoomStateToAll();
-        }
-
-        function hostStartMultiplayerGame() {
-            if (!isHost) return;
-            roomState.gameSessionId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-            roomState.status = 'FULL_GAME';
-            syncRoomStateToAll();
-        }
-
-        function launchFullGame() {
-            if (roomState.status !== 'FULL_GAME') return;
-            try {
-                sessionStorage.setItem(`wod_online_roster_${currentRoomCode}`, JSON.stringify(roomState.players));
-                sessionStorage.setItem(
-                    `wod_online_game_session_${currentRoomCode}`,
-                    roomState.gameSessionId || ''
-                );
-            } catch (error) {
-                console.error('Could not hand off the room roster to the full game.', error);
-                setNetStatus('Oda bilgisi aktarılamadı', 'rose');
-                return;
-            }
-            const gameUrl = new URL('game.html', window.location.href);
-            gameUrl.search = '';
-            gameUrl.searchParams.set('room', currentRoomCode);
-            gameUrl.searchParams.set('peer', myPeerId);
-            gameUrl.searchParams.set('host', isHost ? '1' : '0');
-            window.location.replace(gameUrl.href);
-        }
-
-        // =========================================================================
-        // 5. SENKRONİZE HARİTA VE OYUN EKRANI
-        // =========================================================================
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const mapRadius = 3;
-        const hexSize = 54;
-        let grid = new Map();
-        let reachableHexes = new Map();
-        let wallBuildMode = false;
-        let camera = { x: 0, y: 0, zoom: 1.0 };
-        let isDragging = false;
-        let hasDragged = false;
-        let dragStart = { x: 0, y: 0 };
-
-        const HEX_DIRS = [
-            { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
-            { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
-        ];
-
-        function seededRandom(seed) {
-            let x = Math.sin(seed++) * 10000;
-            return x - Math.floor(x);
-        }
-
-        function generateSyncedMap(seed) {
-            grid.clear();
-            currentRenderedSeed = seed;
-            let s = seed;
-            for (let q = -mapRadius; q <= mapRadius; q++) {
-                const r1 = Math.max(-mapRadius, -q - mapRadius);
-                const r2 = Math.min(mapRadius, -q + mapRadius);
-                for (let r = r1; r <= r2; r++) {
-                    const key = `${q},${r}`;
-                    const dist = (Math.abs(q) + Math.abs(q + r) + Math.abs(r)) / 2;
-                    let type = 'Çayır';
-                    let poi = null;
-
-                    const rnd = seededRandom(s++);
-                    if (dist > 0 && dist < mapRadius) {
-                        if (rnd < 0.12) type = 'Dağ';
-                        else if (rnd < 0.20) type = 'Göl';
-                        else if (rnd < 0.34) poi = 'Sans';
-                        else if (rnd < 0.46) poi = 'Maden';
-                        else if (rnd < 0.58) poi = 'Oduncu';
-                    }
-                    grid.set(key, { q, r, key, type, poi });
-                }
-            }
-
-            // Tüketilmiş şans hücrelerini temizle
-            if (Array.isArray(roomState.consumedChanceKeys)) {
-                roomState.consumedChanceKeys.forEach(k => {
-                    const h = grid.get(k);
-                    if (h && h.poi === 'Sans') h.poi = null;
-                });
-            }
-
-            // Oyuncu şehirlerini işaretle
-            roomState.players.forEach(pl => {
-                const cHex = grid.get(`${pl.cityQ},${pl.cityR}`);
-                if (cHex) {
-                    cHex.type = 'Çayır';
-                    cHex.poi = 'Şehir';
-                    cHex.ownerPeerId = pl.peerId;
-                    cHex.ownerColor = pl.color;
-                }
-            });
-        }
-
-        function applyRoomStateUpdate(newState) {
-            if (!newState) return;
-            roomState = newState;
-
-            if (roomState.status === 'LOBBY') {
-                hasEnteredPlayingScreen = false;
-                document.getElementById('lobby-screen').classList.remove('hidden');
-                document.getElementById('game-hud').classList.add('hidden');
-                renderLobbyPlayers();
-                return;
-            }
-
-            if (roomState.status === 'FULL_GAME') {
-                launchFullGame();
-                return;
-            }
-
-            if (roomState.status === 'PLAYING') {
-                document.getElementById('lobby-screen').classList.add('hidden');
-                document.getElementById('game-hud').classList.remove('hidden');
-
-                if (!hasEnteredPlayingScreen || grid.size === 0 || currentRenderedSeed !== roomState.mapSeed) {
-                    hasEnteredPlayingScreen = true;
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                    camera = { x: 0, y: 0, zoom: 1.0 };
-                    generateSyncedMap(roomState.mapSeed);
-                    appendLog(`🌍 <b>Oyun Başladı!</b> Harita tüm oyuncularda aynı tohumla (#${roomState.mapSeed}) senkronize edildi.`);
-                } else if (Array.isArray(roomState.consumedChanceKeys)) {
-                    roomState.consumedChanceKeys.forEach(k => {
-                        const h = grid.get(k);
-                        if (h && h.poi === 'Sans') h.poi = null;
-                    });
-                }
-            }
-
-            updateGameHUD();
-            recalculateReachableHexes();
-            drawSyncedMap();
-        }
-
-        function isMyTurn() {
-            const activeP = roomState.players[roomState.activePlayerIndex];
-            return activeP && activeP.peerId === myPeerId;
-        }
-
-        function updateGameHUD() {
-            const me = roomState.players.find(x => x.peerId === myPeerId) || roomState.players[0];
-            const activeP = roomState.players[roomState.activePlayerIndex];
-
-            if (me) {
-                const dotEl = document.getElementById('hud-my-dot');
-                if (dotEl) {
-                    dotEl.style.backgroundColor = me.color;
-                    dotEl.className = 'w-9 h-9 rounded-full flex items-center justify-center shrink-0';
-                    dotEl.innerHTML = renderAvatarSvg(sanitizeAvatar(me.avatar, 0), 36, me.color);
-                }
-                document.getElementById('hud-my-name').textContent = me.name;
-                document.getElementById('hud-my-gold').textContent = me.gold;
-                document.getElementById('hud-my-wood').textContent = me.wood;
-                document.getElementById('hud-my-iron').textContent = me.iron;
-            }
-
-            if (activeP) {
-                document.getElementById('turn-active-dot').style.backgroundColor = activeP.color;
-                document.getElementById('turn-number-badge').textContent = `TUR ${roomState.turnNumber}:`;
-                document.getElementById('turn-player-label').innerHTML = activeP.peerId === myPeerId
-                    ? `<span class="text-emerald-300">🟢 SIRA SENDE (${activeP.name})!</span>`
-                    : `<span class="text-amber-200">⏳ Sıra <b>${activeP.name}</b> krallığında...</span>`;
-            }
-
-            // Sol Oyuncu Listesi
-            const pListEl = document.getElementById('hud-players-list');
-            pListEl.innerHTML = roomState.players.map((pl, idx) => {
-                const isAct = idx === roomState.activePlayerIndex;
-                return `
-                    <div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg border ${isAct ? 'bg-slate-800 border-amber-400' : 'bg-slate-900/60 border-slate-800'}">
-                        <div class="flex items-center gap-1.5 truncate">
-                            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${pl.color}"></span>
-                            <span class="font-bold text-white truncate">${pl.name} ${pl.peerId === myPeerId ? '(Sen)' : ''}</span>
-                        </div>
-                        <div class="text-[10px] text-slate-300 shrink-0 space-x-1">
-                            <span>🪙${pl.gold}</span>
-                            <span>🪵${pl.wood}</span>
-                            <span>⛏️${pl.iron}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // Alt Aksiyon Barı
-            const titleEl = document.getElementById('action-bar-title');
-            const subEl = document.getElementById('action-bar-sub');
-            const btnsEl = document.getElementById('action-bar-btns');
-
-            if (!isMyTurn()) {
-                wallBuildMode = false;
-                titleEl.textContent = `⏳ ${activeP ? activeP.name : 'Rakip'} Hamle Yapıyor...`;
-                subEl.textContent = `Diğer oyuncunun zar atışı ve piyon hareketi ekranında canlı olarak gösterilir.`;
-                btnsEl.innerHTML = `
-                    <span class="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-400 font-semibold">
-                        👁️ Canlı İzleme Modu
-                    </span>
-                `;
-                return;
-            }
-
-            if (roomState.phase === 'ROLL') {
-                titleEl.textContent = `🎲 Sıra Sende! Hareket Zarını At`;
-                subEl.textContent = `Attığın zar tüm odadaki oyuncuların ekranında aynı anda dönecek.`;
-                btnsEl.innerHTML = `
-                    <button onclick="requestRollDice()" class="gold-btn text-white font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm shadow-lg">
-                        🎲 Canlı Zar At (1-6)
-                    </button>
-                `;
-            } else {
-                const canWall = me && me.gold >= 2 && me.wood >= 2;
-                titleEl.textContent = `🏃 Hareket & Eylem (${roomState.remainingAP} AP Kaldı | Zar: ${roomState.currentDice})`;
-                subEl.textContent = wallBuildMode
-                    ? `🧱 Duvar koymak için piyonunun bulunduğu hücrenin mavi parlayan bir kenarına tıkla (2A, 2O).`
-                    : (roomState.remainingAP > 0
-                        ? `Sarı parlayan komşu hücrelere tıklayarak piyonunu tüm ekranlarda canlı yürüt!`
-                        : `Hareket puanın (AP) bitti. Duvar örebilir veya turunu bitirebilirsin.`);
-                btnsEl.innerHTML = `
-                    <button onclick="toggleWallBuildMode()" ${!canWall ? 'disabled' : ''} class="px-3.5 py-2 rounded-xl text-xs font-bold border ${wallBuildMode ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-amber-300 border-amber-500/40'} disabled:opacity-40">
-                        🧱 Duvar Koy (2A,2O)
-                    </button>
-                    <button onclick="requestEndTurn()" class="gold-btn text-white font-bold py-2 px-5 rounded-xl text-xs sm:text-sm shadow-lg">
-                        ⏭️ Turu Bitir →
-                    </button>
-                `;
-            }
-        }
-
-        function requestRollDice() {
-            if (!isMyTurn() || roomState.phase !== 'ROLL') return;
-            sendPacketToHost({
-                type: 'ACTION_ROLL_DICE',
-                peerId: myPeerId
-            });
-        }
-
-        function toggleWallBuildMode() {
-            wallBuildMode = !wallBuildMode;
-            updateGameHUD();
-            drawSyncedMap();
-        }
-
-        function requestEndTurn() {
-            if (!isMyTurn()) return;
-            wallBuildMode = false;
-            sendPacketToHost({
-                type: 'ACTION_END_TURN',
-                peerId: myPeerId
-            });
-        }
-
-        function playSynchronizedDiceAnimation(playerName, finalRoll, onComplete) {
-            const overlay = document.getElementById('dice-overlay');
-            const sub = document.getElementById('dice-overlay-sub');
-            const box = document.getElementById('dice-overlay-box');
-            const label = document.getElementById('dice-overlay-label');
-
-            overlay.classList.remove('hidden');
-            box.classList.add('dice-rolling');
-            sub.textContent = `🎲 ${playerName.toUpperCase()} ZAR ATIYOR`;
-            label.textContent = `Tüm Oyuncu Ekranlarında Senkronize Dönüyor...`;
-
-            const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-            let ticks = 0;
-            const iv = setInterval(() => {
-                const t = Math.floor(Math.random() * 6);
-                box.textContent = `${faces[t]} ${t + 1}`;
-                ticks++;
-                if (ticks >= 10) {
-                    clearInterval(iv);
-                    box.classList.remove('dice-rolling');
-                    box.textContent = `${faces[finalRoll - 1]} ${finalRoll}`;
-                    label.textContent = `${playerName}: ${finalRoll} AP Kazandı!`;
-                    appendLog(`🎲 <b>${playerName}</b> hareket zarı attı: <b>${finalRoll} AP</b>!`);
-                    setTimeout(() => {
-                        overlay.classList.add('hidden');
-                        if (onComplete) onComplete();
-                    }, 700);
-                }
-            }, 65);
-        }
-
-        function handlePawnMoveEvent(packet) {
-            appendLog(`🏃 <b>${packet.playerName}</b> ordusunu (${packet.q}, ${packet.r}) hücresine ilerletti.${packet.bonusLog || ''}`);
-            applyRoomStateUpdate(packet.state);
-        }
-
-        function recalculateReachableHexes() {
-            reachableHexes.clear();
-            if (!isMyTurn() || roomState.phase !== 'MOVE_AND_ACT' || roomState.remainingAP <= 0) return;
-            const me = roomState.players.find(x => x.peerId === myPeerId);
-            if (!me) return;
-
-            HEX_DIRS.forEach(d => {
-                const nq = me.q + d.q;
-                const nr = me.r + d.r;
-                const nb = grid.get(`${nq},${nr}`);
-                if (!nb || nb.type === 'Dağ' || nb.type === 'Göl') return;
-                if (roomState.remainingAP >= 1) {
-                    reachableHexes.set(nb.key, 1);
-                }
-            });
-        }
-
-        // =========================================================================
-        // 6. CANLI TİCARET TEKLİFİ VE SOHBET / REAKSİYON SİSTEMİ
-        // =========================================================================
-        function submitChatMessage(e, inputId) {
-            e.preventDefault();
-            const input = document.getElementById(inputId);
-            const text = input.value.trim().slice(0, 240);
-            if (!text) return;
-            const sent = sendPacketToHost({
-                type: 'CHAT_MSG',
-                peerId: myPeerId,
-                text
-            });
-            if (!sent) {
-                setNetStatus('Sohbet mesajı gönderilemedi; bağlantıyı kontrol edin.', 'rose');
-                return;
-            }
-            input.value = '';
-            if (!isHost) appendChatMessage(myName, text);
-        }
-
-        function sendQuickReaction(emoji) {
-            if (!['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
-            const sent = sendPacketToHost({
-                type: 'QUICK_REACTION',
-                peerId: myPeerId,
-                emoji
-            });
-            if (!sent) {
-                setNetStatus('Tepki gönderilemedi; bağlantıyı kontrol edin.', 'rose');
-                return;
-            }
-            if (!isHost) spawnFloatingReaction(emoji, myName);
-        }
-
-        function spawnFloatingReaction(emoji, senderName) {
-            if (!['⚔️', '🛡️', '🤝', '🔥', '👑', '😂'].includes(emoji)) return;
-            const layer = document.getElementById('reactions-layer');
-            const el = document.createElement('div');
-            const leftPct = 25 + Math.random() * 50;
-            el.className = 'floating-reaction absolute bottom-20 flex flex-col items-center';
-            el.style.left = `${leftPct}%`;
-            const icon = document.createElement('span');
-            icon.className = 'text-4xl drop-shadow-lg';
-            icon.textContent = emoji;
-            const label = document.createElement('span');
-            label.className = 'px-2 py-0.5 rounded-full bg-slate-900/90 border border-amber-400/50 text-[10px] font-bold text-amber-300';
-            label.textContent = senderName;
-            el.append(icon, label);
-            layer.appendChild(el);
-            setTimeout(() => el.remove(), 2200);
-        }
-
-        function openOnlineTradeModal() {
-            const others = roomState.players.filter(x => x.peerId !== myPeerId);
-            if (others.length === 0) {
-                alert('Ticaret teklifi göndermek için odada en az 1 başka oyuncu olmalıdır! ("Yan Sekmede Test Oyuncusu Aç" butonunu kullanabilirsiniz).');
-                return;
-            }
-            const sel = document.getElementById('online-trade-target');
-            sel.innerHTML = others.map(o => `<option value="${o.peerId}">${o.name} (🪙${o.gold} 🪵${o.wood} ⛏️${o.iron})</option>`).join('');
-            document.getElementById('send-trade-modal').classList.remove('hidden');
-        }
-
-        function sendLiveTradeOffer() {
-            const me = roomState.players.find(x => x.peerId === myPeerId);
-            const toPeerId = document.getElementById('online-trade-target').value;
-            const target = roomState.players.find(x => x.peerId === toPeerId);
-            if (!me || !target) return;
-
-            const giveGold = Math.max(0, parseInt(document.getElementById('ot-give-gold').value) || 0);
-            const giveWood = Math.max(0, parseInt(document.getElementById('ot-give-wood').value) || 0);
-            const giveIron = Math.max(0, parseInt(document.getElementById('ot-give-iron').value) || 0);
-            const takeGold = Math.max(0, parseInt(document.getElementById('ot-take-gold').value) || 0);
-            const takeWood = Math.max(0, parseInt(document.getElementById('ot-take-wood').value) || 0);
-            const takeIron = Math.max(0, parseInt(document.getElementById('ot-take-iron').value) || 0);
-
-            if (me.gold < giveGold || me.wood < giveWood || me.iron < giveIron) {
-                alert('Vereceğiniz kaynak miktarı deponuzda yok!');
-                return;
-            }
-
-            document.getElementById('send-trade-modal').classList.add('hidden');
-            appendLog(`📨 <b>${target.name}</b> oyuncusuna canlı ticaret teklifi gönderildi, yanıt bekleniyor...`);
-
-            sendPacketToHost({
-                type: 'LIVE_TRADE_OFFER',
-                fromPeerId: myPeerId,
-                fromName: me.name,
-                toPeerId: target.peerId,
-                toName: target.name,
-                giveGold, giveWood, giveIron,
-                takeGold, takeWood, takeIron
-            });
-        }
-
-        function showIncomingTradeModal(offerPacket) {
-            pendingIncomingOffer = offerPacket;
-            document.getElementById('incoming-trade-desc').innerHTML = `
-                <b class="text-amber-300">${offerPacket.fromName}</b> krallığı sana şu anlaşmayı teklif ediyor:<br><br>
-                📤 <b>Sana Vereceği:</b> ${offerPacket.giveGold}🪙 Altın, ${offerPacket.giveWood}🪵 Odun, ${offerPacket.giveIron}⛏️ Demir<br>
-                📥 <b>Senden İstediği:</b> ${offerPacket.takeGold}🪙 Altın, ${offerPacket.takeWood}🪵 Odun, ${offerPacket.takeIron}⛏️ Demir
-            `;
-            document.getElementById('incoming-trade-modal').classList.remove('hidden');
-        }
-
-        function respondToIncomingTrade(accepted) {
-            document.getElementById('incoming-trade-modal').classList.add('hidden');
-            if (!pendingIncomingOffer) return;
-            sendPacketToHost({
-                type: 'LIVE_TRADE_RESPONSE',
-                accepted,
-                offer: pendingIncomingOffer
-            });
-            pendingIncomingOffer = null;
-        }
-
-        function handleTradeResultPacket(packet) {
-            const o = packet.offer;
-            if (packet.accepted) {
-                appendLog(`🤝🐫 <b>Canlı Ticaret Onaylandı!</b> <b>${o.fromName}</b> ile <b>${o.toName}</b> anlaşmayı imzaladı ve her iki krallık da <b>+1 🪙 Kervan Bonusu</b> kazandı!`);
-            } else {
-                appendLog(`❌ <b>${o.toName}</b>, <b>${o.fromName}</b> krallığının ticaret teklifini reddetti.`);
-            }
-            if (packet.state) {
-                applyRoomStateUpdate(packet.state);
-            }
-        }
-
-        function appendLog(html) {
-            ['lobby-chat-box', 'game-log-box'].forEach(id => {
-                const box = document.getElementById(id);
-                if (!box) return;
-                const div = document.createElement('div');
-                div.className = 'border-b border-slate-800/80 pb-1 leading-snug';
-                div.innerHTML = html;
-                box.prepend(div);
-            });
-        }
-
-        function escapeHTML(value) {
-            return String(value).replace(/[&<>"']/g, char => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#39;'
-            })[char]);
-        }
-
-        function appendChatMessage(sender, text) {
-            ['lobby-chat-box', 'game-log-box'].forEach(id => {
-                const box = document.getElementById(id);
-                if (!box) return;
-                const row = document.createElement('div');
-                row.className = 'border-b border-slate-800/80 pb-1 leading-snug';
-                const name = document.createElement('b');
-                name.textContent = `💬 ${sender}: `;
-                const message = document.createElement('span');
-                message.textContent = text;
-                row.append(name, message);
-                box.prepend(row);
-            });
-        }
-
-        // =========================================================================
-        // 7. CANVAS HARİTA ÇİZİMİ VE TIKLAMA ETKİLEŞİMİ
-        // =========================================================================
-        function hexToPixel(q, r) {
-            return {
-                x: hexSize * Math.sqrt(3) * (q + r / 2),
-                y: hexSize * (3 / 2) * r
-            };
-        }
-
-        function pixelToHex(x, y) {
-            const q = (Math.sqrt(3) / 3 * x - 1 / 3 * y) / hexSize;
-            const r = (2 / 3 * y) / hexSize;
-            let s = -q - r;
-            let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
-            const qd = Math.abs(rq - q), rd = Math.abs(rr - r), sd = Math.abs(rs - s);
-            if (qd > rd && qd > sd) rq = -rr - rs;
-            else if (rd > sd) rr = -rq - rs;
-            return { q: rq, r: rr };
-        }
-
-        function getHexVertex(cx, cy, i) {
-            const angle = (60 * i - 30) * Math.PI / 180;
-            return {
-                x: cx + hexSize * Math.cos(angle),
-                y: cy + hexSize * Math.sin(angle)
-            };
-        }
-
-        const DIR_VERTICES = [[0, 1], [5, 0], [4, 5], [3, 4], [2, 3], [1, 2]];
-
-        function drawSyncedMap() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (grid.size === 0) return;
-
-            ctx.save();
-            ctx.translate(canvas.width / 2 + camera.x, canvas.height / 2 + camera.y);
-            ctx.scale(camera.zoom, camera.zoom);
-
-            // 1. Altıgen Hücreler
-            grid.forEach(hex => {
-                const { x, y } = hexToPixel(hex.q, hex.r);
-                ctx.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const v = getHexVertex(x, y, i);
-                    if (i === 0) ctx.moveTo(v.x, v.y);
-                    else ctx.lineTo(v.x, v.y);
-                }
-                ctx.closePath();
-
-                ctx.fillStyle = hex.type === 'Dağ' ? '#475569' : (hex.type === 'Göl' ? '#1d4ed8' : '#2f855a');
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#1e293b';
-                ctx.stroke();
-
-                // Hareket menzili vurgusu
-                if (reachableHexes.has(hex.key) && !wallBuildMode) {
-                    ctx.fillStyle = 'rgba(250, 204, 21, 0.28)';
-                    ctx.fill();
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = '#facc15';
-                    ctx.stroke();
-                }
-
-                // POI ve Şehir simgeleri
-                ctx.textAlign = 'center';
-                if (hex.poi === 'Şehir') {
-                    ctx.fillStyle = hex.ownerColor || '#fbbf24';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 18, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.font = '16px Inter';
-                    ctx.fillText('🏰', x, y + 5);
-                } else if (hex.poi === 'Maden') {
-                    ctx.font = '16px Inter';
-                    ctx.fillText('⛏️', x, y + 5);
-                } else if (hex.poi === 'Oduncu') {
-                    ctx.font = '16px Inter';
-                    ctx.fillText('🪵', x, y + 5);
-                } else if (hex.poi === 'Sans') {
-                    ctx.fillStyle = '#9333ea';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 14, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 14px Inter';
-                    ctx.fillText('?', x, y + 5);
-                } else if (hex.type === 'Dağ') {
-                    ctx.font = '16px Inter';
-                    ctx.fillText('⛰️', x, y + 5);
-                } else if (hex.type === 'Göl') {
-                    ctx.font = '15px Inter';
-                    ctx.fillText('💧', x, y + 5);
-                }
-            });
-
-            // 2. Duvar İnşa Modu Kenar Vurguları
-            if (wallBuildMode && isMyTurn()) {
-                const me = roomState.players.find(x => x.peerId === myPeerId);
-                if (me) {
-                    const { x, y } = hexToPixel(me.q, me.r);
-                    for (let d = 0; d < 6; d++) {
-                        const [v1Idx, v2Idx] = DIR_VERTICES[d];
-                        const p1 = getHexVertex(x, y, v1Idx);
-                        const p2 = getHexVertex(x, y, v2Idx);
-                        ctx.strokeStyle = '#38bdf8';
-                        ctx.lineWidth = 7;
-                        ctx.lineCap = 'round';
-                        ctx.beginPath();
-                        ctx.moveTo(p1.x, p1.y);
-                        ctx.lineTo(p2.x, p2.y);
-                        ctx.stroke();
-                    }
-                }
-            }
-
-            // 3. İnşa Edilmiş Senkronize Duvarlar
-            roomState.walls.forEach(w => {
-                const { x, y } = hexToPixel(w.q, w.r);
-                const [v1Idx, v2Idx] = DIR_VERTICES[w.dir];
-                const p1 = getHexVertex(x, y, v1Idx);
-                const p2 = getHexVertex(x, y, v2Idx);
-
-                ctx.strokeStyle = '#0f172a';
-                ctx.lineWidth = 10;
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
-
-                ctx.strokeStyle = w.color;
-                ctx.lineWidth = 6;
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
-            });
-
-            // 4. Oyuncu Piyonları
-            roomState.players.forEach((pl, idx) => {
-                const { x, y } = hexToPixel(pl.q, pl.r);
-                const isAct = idx === roomState.activePlayerIndex;
-
-                if (isAct) {
-                    ctx.strokeStyle = '#fde047';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 22, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-
-                ctx.fillStyle = pl.color;
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(x, y, 14, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 11px Inter';
-                ctx.textAlign = 'center';
-                ctx.fillText('⚔️', x, y + 4);
-
-                ctx.fillStyle = '#fef08a';
-                ctx.font = 'bold 9px Inter';
-                ctx.fillText(pl.name.split(' ')[0], x, y - 18);
-            });
-
-            ctx.restore();
-        }
-
-        function handleMapClick(worldX, worldY) {
-            if (roomState.status !== 'PLAYING' || !isMyTurn()) return;
-            const me = roomState.players.find(x => x.peerId === myPeerId);
-            if (!me) return;
-
-            if (wallBuildMode) {
-                const { x, y } = hexToPixel(me.q, me.r);
-                let bestDir = -1;
-                let bestDist = 24;
-                for (let d = 0; d < 6; d++) {
-                    const [v1Idx, v2Idx] = DIR_VERTICES[d];
-                    const p1 = getHexVertex(x, y, v1Idx);
-                    const p2 = getHexVertex(x, y, v2Idx);
-                    const midX = (p1.x + p2.x) / 2;
-                    const midY = (p1.y + p2.y) / 2;
-                    const dist = Math.hypot(worldX - midX, worldY - midY);
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestDir = d;
-                    }
-                }
-                if (bestDir !== -1) {
-                    wallBuildMode = false;
-                    sendPacketToHost({
-                        type: 'ACTION_PLACE_WALL',
-                        peerId: myPeerId,
-                        q: me.q,
-                        r: me.r,
-                        dir: bestDir,
-                        edgeKey: `${me.q},${me.r}:${bestDir}`
-                    });
-                }
-                return;
-            }
-
-            const hc = pixelToHex(worldX, worldY);
-            const key = `${hc.q},${hc.r}`;
-            if (reachableHexes.has(key)) {
-                sendPacketToHost({
-                    type: 'ACTION_MOVE_PAWN',
-                    peerId: myPeerId,
-                    q: hc.q,
-                    r: hc.r,
-                    cost: reachableHexes.get(key)
-                });
-            }
-        }
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            drawSyncedMap();
-        }
-        window.addEventListener('resize', resizeCanvas);
-
-        canvas.addEventListener('mousedown', e => {
-            isDragging = true;
-            hasDragged = false;
-            dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y };
-        });
-
-        window.addEventListener('mousemove', e => {
-            if (!isDragging) return;
-            if (Math.hypot(e.clientX - dragStart.x - camera.x, e.clientY - dragStart.y - camera.y) > 5) {
-                hasDragged = true;
-            }
-            camera.x = e.clientX - dragStart.x;
-            camera.y = e.clientY - dragStart.y;
-            drawSyncedMap();
-        });
-
-        window.addEventListener('mouseup', e => {
-            if (!isDragging) return;
-            isDragging = false;
-            if (!hasDragged) {
-                const rect = canvas.getBoundingClientRect();
-                const wx = (e.clientX - rect.left - canvas.width / 2 - camera.x) / camera.zoom;
-                const wy = (e.clientY - rect.top - canvas.height / 2 - camera.y) / camera.zoom;
-                handleMapClick(wx, wy);
-            }
-        });
-
-        window.onload = () => {
-            resizeCanvas();
-            initLobbyControls();
-        };
-    </script>
+      </article>
+    </section>
+
+    <footer class="footer">
+      Yeni oyunlar eklendikçe bu sayfadan erişilebilir.
+    </footer>
+  </main>
 </body>
 </html>

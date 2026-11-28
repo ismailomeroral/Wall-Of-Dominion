@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="BARONIA Logosu">
+  <defs>
+    <linearGradient id="br-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="45%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+    <linearGradient id="br-gold-soft" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <radialGradient id="br-bg" cx="40%" cy="28%" r="76%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="65%" stop-color="#0a101d"/>
+      <stop offset="100%" stop-color="#050810"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded Luxury Obsidian Octagon Medallion -->
+  <polygon points="36,7 92,7 121,36 121,92 92,121 36,121 7,92 7,36" fill="url(#br-bg)" stroke="url(#br-gold)" stroke-width="5" stroke-linejoin="round"/>
+  <polygon points="40,14 88,14 114,40 114,88 88,114 40,114 14,88 14,40" fill="none" stroke="rgba(253,230,138,0.26)" stroke-width="1.6" stroke-linejoin="round"/>
+
+  <!-- Minimalist 3-Point Royal Crown above Monogram -->
+  <path d="M44 37 L48 22 L57 29 L64 17 L71 29 L80 22 L84 37 Z" fill="url(#br-gold)" stroke="#78350f" stroke-width="1.4" stroke-linejoin="round"/>
+  <rect x="44" y="38.5" width="40" height="4" rx="2" fill="url(#br-gold-soft)"/>
+
+  <!-- Bold Sculpted Metallic Gold "B" Monogram -->
+  <text x="64" y="96" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="900" font-size="68" fill="rgba(0,0,0,0.55)">B</text>
+  <text x="64" y="94" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="900" font-size="68" fill="url(#br-gold)" stroke="#78350f" stroke-width="1.4">B</text>
+</svg>

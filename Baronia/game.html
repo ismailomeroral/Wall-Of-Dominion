@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BARONIA — 3D Oyun Tahtası</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+  <!-- Full-Viewport Interactive 3D Board -->
+  <div id="board-3d-root" class="board-3d-root"></div>
+
+  <!-- Non-blocking Floating Glass HUD -->
+  <div class="hud-overlay">
+    <div class="hud-top-stack">
+      <header class="game-topbar glass-panel hud-interactive">
+        <div class="topbar-left">
+          <img src="assets/icon.svg" alt="BARONIA" width="28" height="28">
+          <h1 class="topbar-title font-display">BARONIA</h1>
+          <span class="pill" style="font-size:0.68rem;">İstanbul</span>
+          <span id="room-badge" class="pill pill-gold">Oda: -</span>
+          <span id="net-status-pill" class="pill pill-blue">Hazırlanıyor</span>
+          <span id="turn-counter-pill" class="pill">Tur 1</span>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="cam-toolbar" title="3D Kamera Kontrolleri">
+            <button type="button" id="cam-zoom-in" class="cam-btn" title="Yakınlaş">+</button>
+            <button type="button" id="cam-zoom-out" class="cam-btn" title="Uzaklaş">−</button>
+            <button type="button" id="cam-rot-left" class="cam-btn" title="Sola Döndür">⟲</button>
+            <button type="button" id="cam-rot-right" class="cam-btn" title="Sağa Döndür">⟳</button>
+            <button type="button" id="cam-reset" class="cam-btn">Merkezle</button>
+            <button type="button" id="cam-follow" class="cam-btn active" title="Piyonu Takip Et">🎥 Takip</button>
+          </div>
+
+          <button type="button" id="btn-toggle-sfx" class="btn btn-ghost btn-sm" title="Ses Efektleri">🔊 Ses</button>
+          <button type="button" id="btn-open-bank" class="btn btn-emerald btn-sm">🏦 Banka</button>
+          <button type="button" id="btn-open-props" class="btn btn-blue btn-sm">🏢 Mülklerim</button>
+          <button type="button" id="btn-open-rules" class="btn btn-ghost btn-sm">📊 Tablo</button>
+          <a href="index.html" class="btn btn-ghost btn-sm">← Lobi</a>
+        </div>
+      </header>
+
+      <!-- Fixed-Width Top Player Cards -->
+      <section id="players-hud" class="players-hud hud-interactive" aria-label="Oyuncu Kartları"></section>
+    </div>
+
+    <div class="hud-bottom-row">
+      <!-- Bottom-Left Collapsible Event Feed -->
+      <aside id="log-drawer" class="log-drawer glass-panel hud-interactive">
+        <div class="log-drawer-head">
+          <h3 class="log-drawer-title">📜 Canlı Olay Akışı</h3>
+          <button type="button" id="btn-toggle-logs" class="cam-btn">Gizle</button>
+        </div>
+        <div id="log-list" class="log-list"></div>
+      </aside>
+
+      <!-- Bottom-Center Single-Die Floating Command Dock -->
+      <div class="command-dock-wrap">
+        <div id="floating-money-pop" class="floating-money-pop hidden"></div>
+
+        <div class="command-dock glass-panel hud-interactive">
+          <div id="die-1" class="die-badge" title="Tek Zar (1–6)">🎲</div>
+          <div class="dock-info">
+            <div id="center-turn-caption" class="dock-turn-title">Sıra yükleniyor...</div>
+            <div id="center-status-box" class="dock-status-sub">3D Boğaz Baronu tahtası hazırlanıyor...</div>
+          </div>
+          <div id="center-action-row" class="dock-actions"></div>
+        </div>
+      </div>
+
+      <!-- Bottom-Right 3D Controls Hint -->
+      <div class="controls-hint-pill glass-panel hud-interactive">
+        🖱️ <strong>Sol Sürükle:</strong> Gez &bull; <strong>Sağ / Shift:</strong> Döndür<br>
+        🎡 <strong>Tekerlek:</strong> Yakınlaş &bull; <strong>Kareye Tıkla:</strong> Detay
+      </div>
+    </div>
+  </div>
+
+  <!-- Landing Tile Arrival Banner & Flying Coin FX Layer -->
+  <div id="landing-banner" class="landing-banner hidden"></div>
+  <div id="fx-layer" class="fx-layer"></div>
+
+  <!-- Interactive Income Receipt Overlay -->
+  <div id="income-backdrop" class="income-backdrop hidden"></div>
+
+  <!-- Interactive POS Terminal Payment Overlay -->
+  <div id="pos-backdrop" class="pos-backdrop hidden" role="dialog" aria-modal="true"></div>
+
+  <!-- Dynamic Modal Container -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div id="modal-card" class="modal-card"></div>
+  </div>
+
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="js/sfx.js"></script>
+  <script src="js/avatar.js"></script>
+  <script src="js/boardData.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/board3d.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BARONIA — Lobi &amp; İstanbul Edisyonu</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/lobby.css">
+</head>
+<body>
+  <div class="lobby-bg-glow"></div>
+
+  <main class="lobby-shell">
+    <header class="lobby-hero glass-panel">
+      <div class="brand-lockup">
+        <div class="brand-emblem" style="padding:4px;background:transparent;border:none;box-shadow:none;">
+          <img src="assets/icon.svg" alt="BARONIA" width="56" height="56">
+        </div>
+        <div>
+          <h1 class="brand-title font-display">BARONIA</h1>
+          <p class="brand-tagline">İstanbul Edisyonu • 3D haritada arsa topla, işletmeni kur, ticaret imparatorluğunu yönet.</p>
+        </div>
+      </div>
+      <div class="pill pill-gold">40 Kare 3D • 7 Mahalle • Nakit &amp; Banka • İhale</div>
+    </header>
+
+    <section class="lobby-grid">
+      <!-- Left: Tycoon Profile & Shaded 3/4 Avatar Studio -->
+      <div class="panel-card glass-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+          <h2 class="panel-title font-display">EMLAK PATRONU PROFİLİ</h2>
+          <button type="button" id="btn-random-avatar" class="btn btn-ghost btn-sm">🎲 Rastgele</button>
+        </div>
+        <p class="panel-sub">3/4 gölgeli patron portren hem üst oyuncu kartında hem de 3D piyonunda görünür.</p>
+
+        <div class="avatar-stage">
+          <div id="avatar-preview" class="avatar-preview-box"></div>
+          <div class="avatar-name-wrap">
+            <label for="player-name-input" class="field-label">Patron Adın</label>
+            <input type="text" id="player-name-input" class="text-input" maxlength="18" placeholder="Adını yaz..." value="Patron">
+          </div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Piyon &amp; Kravat Rengi</span>
+          <div id="picker-bg" class="swatch-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Ten Rengi</span>
+          <div id="picker-skin" class="swatch-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Gövde Tipi</span>
+          <div id="picker-body" class="chip-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Saç / Şapka</span>
+          <div id="picker-hair" class="chip-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Saç / Bıyık Rengi</span>
+          <div id="picker-hair-color" class="swatch-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">Bakış &amp; Gözlük</span>
+          <div id="picker-eyes" class="chip-row"></div>
+        </div>
+
+        <div class="customizer-group">
+          <span class="field-label">İfade &amp; Sakal</span>
+          <div id="picker-mouth" class="chip-row"></div>
+        </div>
+
+        <div class="customizer-group" style="margin-bottom:0;">
+          <span class="field-label">Takım Elbise Rengi</span>
+          <div id="picker-shirt" class="swatch-row"></div>
+        </div>
+      </div>
+
+      <!-- Right: Room Create / Join & Active Roster -->
+      <div class="panel-card glass-panel">
+        <h2 class="panel-title font-display">OYUN ODASI</h2>
+        <p class="panel-sub">Online oda kurup davet linki paylaş ya da aynı cihazda botlara karşı oyna.</p>
+
+        <div id="mode-tabs-wrap" class="mode-tabs">
+          <button type="button" class="mode-tab active" data-mode="online">🌐 Online Oda (Multiplayer)</button>
+          <button type="button" class="mode-tab" data-mode="local">🤖 Tek Cihaz / Botlu Oyun</button>
+        </div>
+
+        <!-- Online: Create or Join -->
+        <div id="online-entry-view" class="room-action-split">
+          <div class="action-box">
+            <h3>👑 Yeni Online Oda Kur</h3>
+            <p>Oda kodu oluştur ve arkadaşlarını davet et. 2–4 oyuncu arası oynanır, dilersen bot da ekleyebilirsin.</p>
+            <button type="button" id="btn-create-room" class="btn btn-primary btn-lg" style="width:100%;">✨ Oda Kur ve Bekle</button>
+          </div>
+
+          <div class="action-box join-box">
+            <h3>🚀 Var Olan Odaya Bağlan</h3>
+            <p>Arkadaşının paylaştığı 5 haneli oda kodunu aşağıya yaz:</p>
+            <div class="join-row">
+              <input type="text" id="join-code-input" class="text-input code-input" maxlength="6" placeholder="KOD">
+              <button type="button" id="btn-join-room" class="btn btn-blue" style="flex:1;">Odaya Bağlan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Online: Active Room Roster -->
+        <div id="online-roster-view" class="hidden">
+          <div class="room-header-bar">
+            <div>
+              <span class="field-label" style="margin-bottom:2px;">Oda Kodu</span>
+              <div id="active-room-code" class="room-code-big">-----</div>
+            </div>
+            <div class="room-share-btns">
+              <button type="button" id="btn-copy-code" class="btn btn-ghost btn-sm">📋 Kodu Kopyala</button>
+              <button type="button" id="btn-copy-link" class="btn btn-ghost btn-sm">🔗 Davet Linki</button>
+              <button type="button" id="btn-leave-room" class="btn btn-danger btn-sm">Çık</button>
+            </div>
+          </div>
+
+          <div id="room-roster-list" class="roster-list"></div>
+
+          <div class="room-footer-controls">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" id="btn-add-online-bot" class="btn btn-ghost btn-sm hidden">🤖 Bot Ekle</button>
+              <button type="button" id="btn-toggle-ready" class="btn btn-emerald hidden">✅ Hazırım</button>
+            </div>
+            <button type="button" id="btn-start-online-game" class="btn btn-primary btn-lg hidden">🚀 Oyunu Başlat</button>
+          </div>
+        </div>
+
+        <!-- Local / Bot Setup -->
+        <div id="local-setup-view" class="hidden">
+          <div class="action-box">
+            <h3>Oyuncu Kadrosu (2–4 Oyuncu)</h3>
+            <p>Kendi karakterin ilk sırada yer alır. İstediğin kadar yapay zeka botu veya yerel oyuncu ekleyebilirsin.</p>
+            <div id="local-players-list" class="local-player-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;margin-top:12px;">
+              <div style="display:flex;gap:8px;">
+                <button type="button" id="btn-local-add-bot" class="btn btn-ghost btn-sm">🤖 Bot Ekle</button>
+                <button type="button" id="btn-local-add-human" class="btn btn-ghost btn-sm">👤 İnsan Ekle</button>
+              </div>
+              <button type="button" id="btn-start-local-game" class="btn btn-primary btn-lg">🚀 Maçı Başlat</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="lobby-status" class="status-banner hidden"></div>
+      </div>
+    </section>
+
+    <section class="feature-strip">
+      <div class="feature-mini glass-panel">
+        <div class="feature-mini-title">🍦 3D Dondurmacı</div>
+        <div class="feature-mini-desc">Üstünde durmasalar bile önünden geçen tüm rakiplerden geçiş ücreti keser.</div>
+      </div>
+      <div class="feature-mini glass-panel">
+        <div class="feature-mini-title">🛒 3D Market</div>
+        <div class="feature-mini-desc">Başlangıç karesinden her geçişinde maaşına ek düzenli ciro getirir.</div>
+      </div>
+      <div class="feature-mini glass-panel">
+        <div class="feature-mini-title">☕ Kafe &amp; 🛍️ Gökdelen</div>
+        <div class="feature-mini-desc">Kafe aynı mahalledeki dükkanları +%25 güçlendirir; Mağaza yüksek kira keser.</div>
+      </div>
+      <div class="feature-mini glass-panel">
+        <div class="feature-mini-title">🏦 %0 İlk Kredi</div>
+        <div class="feature-mini-desc">İlk çektiğin kredide faiz yok ve tüm krediler 3 tur ödemesiz başlar.</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="js/avatar.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/lobby.js"></script>
+</body>
+</html>
